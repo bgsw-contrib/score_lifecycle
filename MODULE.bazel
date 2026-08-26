@@ -40,18 +40,25 @@ bazel_dep(name = "score_platform", version = "0.6.4", dev_dependency = True)
 
 ###############################################################################
 #
-# S-CORE Toolchains (DO NOT MODIFY)
+# S-CORE Toolchains
 #
 ###############################################################################
-bazel_dep(name = "score_bazel_cpp_toolchains", version = "0.5.4")
+bazel_dep(name = "score_bazel_cpp_toolchains", version = "0.5.4", dev_dependency = True)
 
-# GCC Toolchains
-gcc = use_extension("@score_bazel_cpp_toolchains//extensions:gcc.bzl", "gcc")
+# GCC & QNX Toolchains
+gcc = use_extension("@score_bazel_cpp_toolchains//extensions:gcc.bzl", "gcc", dev_dependency = True)
 
 ## Linux Toolchains
 gcc.toolchain(
     name = "score_gcc_x86_64_toolchain",
     target_cpu = "x86_64",
+    target_os = "linux",
+    use_default_package = True,
+    version = "12.2.0",
+)
+gcc.toolchain(
+    name = "score_gcc_aarch64_toolchain",
+    target_cpu = "aarch64",
     target_os = "linux",
     use_default_package = True,
     version = "12.2.0",
@@ -82,12 +89,35 @@ gcc.toolchain(
     target_os = "linux",
     use_default_package = True,
 )
+
+## QNX Toolchains
+gcc.toolchain(
+    name = "score_qcc_aarch64_toolchain",
+    sdp_version = "8.0.4",
+    target_cpu = "aarch64",
+    target_os = "qnx",
+    use_default_package = True,
+    version = "12.2.0",
+)
+gcc.toolchain(
+    name = "score_qcc_x86_64_toolchain",
+    sdp_version = "8.0.4",
+    target_cpu = "x86_64",
+    target_os = "qnx",
+    use_default_package = True,
+    version = "12.2.0",
+)
 use_repo(
     gcc,
     "score_autosd10_aarch64_toolchain",
     "score_autosd10_x86_64_toolchain",
     "score_ebclfsa_toolchain",
+    "score_gcc_aarch64_toolchain",
     "score_gcc_x86_64_toolchain",
+    "score_qcc_aarch64_toolchain",
+    "score_qcc_aarch64_toolchain_pkg",
+    "score_qcc_x86_64_toolchain",
+    "score_qcc_x86_64_toolchain_pkg",
 )
 
 # Rust Toolchains
@@ -123,52 +153,6 @@ use_repo(
     ferrocene,
     "ferrocene_aarch64_ebclfsa",
 )
-
-# QNX Toolchains
-qcc = use_extension("@score_bazel_cpp_toolchains//extensions:gcc.bzl", "gcc", dev_dependency = True)
-qcc.toolchain(
-    name = "score_qcc_aarch64_toolchain",
-    sdp_version = "8.0.0",
-    target_cpu = "aarch64",
-    target_os = "qnx",
-    use_default_package = True,
-    version = "12.2.0",
-)
-qcc.toolchain(
-    name = "score_qcc_x86_64_toolchain",
-    sdp_version = "8.0.0",
-    target_cpu = "x86_64",
-    target_os = "qnx",
-    use_default_package = True,
-    version = "12.2.0",
-)
-use_repo(
-    qcc,
-    "score_qcc_aarch64_toolchain",
-    "score_qcc_x86_64_toolchain",
-    "score_qcc_x86_64_toolchain_pkg",
-)
-
-###############################################################################
-#
-# Repository-specific toolchain additions
-#
-###############################################################################
-
-# Import QNX aarch64 toolchain package (missing from central S-CORE use_repo block)
-qcc_repo_specific = use_extension("@score_bazel_cpp_toolchains//extensions:gcc.bzl", "gcc", dev_dependency = True)
-use_repo(qcc_repo_specific, "score_qcc_aarch64_toolchain_pkg")
-
-# aarch64 Linux GCC toolchain (not in central S-CORE config)
-gcc_aarch64 = use_extension("@score_bazel_cpp_toolchains//extensions:gcc.bzl", "gcc")
-gcc_aarch64.toolchain(
-    name = "score_gcc_aarch64_toolchain",
-    target_cpu = "aarch64",
-    target_os = "linux",
-    use_default_package = True,
-    version = "12.2.0",
-)
-use_repo(gcc_aarch64, "score_gcc_aarch64_toolchain")
 
 # LLVM toolchain (used for clang-format and clang-tidy)
 bazel_dep(name = "toolchains_llvm", version = "1.4.0", dev_dependency = True)
