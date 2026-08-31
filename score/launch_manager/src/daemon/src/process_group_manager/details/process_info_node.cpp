@@ -41,7 +41,7 @@ ProcessInfoNode::ProcessInfoNode(
         configuration::ApplicationType::ReportingAndSupervised)
     {
         config_.deployment_config.environmental_variables.add(
-            "LCM_ALIVE_INTERFACE_PATH", aliveInterfacePath(config_.name));
+            "LCM_ALIVE_INTERFACE_PATH", aliveInterfacePath(IdentifierHash{config_.name}));
     }
     if (config_.deployment_config.ready_recovery_action.has_value())
     {
@@ -448,6 +448,11 @@ osal::ProcessID ProcessInfoNode::getPid() const
 score::mw::lifecycle::ProcessState ProcessInfoNode::getState() const
 {
     return process_state_.load();
+}
+
+std::chrono::milliseconds ProcessInfoNode::getTerminationTimeout() const
+{
+    return std::chrono::milliseconds{config_.deployment_config.shutdown_timeout_ms};
 }
 
 uint32_t ProcessInfoNode::getIndex() const

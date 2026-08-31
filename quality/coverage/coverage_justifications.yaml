@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -10,20 +10,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-
-name: Documentation Cleanup
-
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-on:
-  schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight UTC
-
-jobs:
-  docs-cleanup:
-    uses: eclipse-score/cicd-workflows/.github/workflows/docs-cleanup.yml@8d80e8df150cae21d53cbc8031d0f970648f7a67 # v0.0.3
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+#
+# Coverage justifications for the LLVM source-based coverage pipeline.
+# Add entries here and mark the corresponding lines in code with
+# `// COV_JUSTIFIED <id>` (or COV_JUSTIFIED_START/STOP for a region).
+# Valid categories: defensive_programming, tool_false_positive,
+# platform_specific, other.
+version: 1
+justifications: []
