@@ -224,6 +224,10 @@ component_properties (object)
                     * **Constraint:** Must be greater than 0.
                     * **Default:** ``0.01``
 
+.. warning::
+    ``ready_condition`` with ``file_state`` is currently not implemented
+
+
 .. _lm_conf_deployment_config_object_:
 
 deployment_config (object)
@@ -447,7 +451,7 @@ alive_supervision
 
   .. dropdown:: alive_supervision_defaults.json
 
-     .. literalinclude:: ../../../../score/launch_manager/src/daemon/src/configuration/config_schema/default_values/alive_supervision_defaults.json
+     .. literalinclude:: default_values/alive_supervision_defaults.json
         :language: json
 
 watchdog
@@ -457,7 +461,7 @@ watchdog
 
   .. dropdown:: watchdog_defaults.json
 
-     .. literalinclude:: ../../../../score/launch_manager/src/daemon/src/configuration/config_schema/default_values/watchdog_defaults.json
+     .. literalinclude:: default_values/watchdog_defaults.json
         :language: json
 
 run_target
@@ -465,7 +469,7 @@ run_target
 
   .. dropdown:: run_target_defaults.json
 
-     .. literalinclude:: ../../../../score/launch_manager/src/daemon/src/configuration/config_schema/default_values/run_target_defaults.json
+     .. literalinclude:: default_values/run_target_defaults.json
         :language: json
 
 component_properties
@@ -473,7 +477,7 @@ component_properties
 
   .. dropdown:: component_properties_defaults.json
 
-     .. literalinclude:: ../../../../score/launch_manager/src/daemon/src/configuration/config_schema/default_values/component_properties_defaults.json
+     .. literalinclude:: default_values/component_properties_defaults.json
         :language: json
 
 deployment_config
@@ -481,7 +485,7 @@ deployment_config
 
   .. dropdown:: deployment_config_defaults.json
 
-     .. literalinclude:: ../../../../score/launch_manager/src/daemon/src/configuration/config_schema/default_values/deployment_config_defaults.json
+     .. literalinclude:: default_values/deployment_config_defaults.json
         :language: json
 
 fallback_run_target
