@@ -36,7 +36,9 @@ build --copt=-Wall
 build --copt=-Wextra
 build --copt=-Werror
 build --copt=-Wno-error=deprecated-declarations
-build --per_file_copt=external/.*@-Wno-error
+
+# Disable warnings for external code
+build --per_file_copt=external/.*@-w
 
 # Common test flags for all platforms
 test --test_output=errors
