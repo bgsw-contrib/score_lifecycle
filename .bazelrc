@@ -69,11 +69,9 @@ build:x86_64-linux --extra_toolchains=@score_toolchains_rust//toolchains/ferroce
 test:x86_64-linux --//config:integration_mode=docker
 test:x86_64-linux --//config:unit_mode=host
 
-# Target configuration for CPU:AArch64|OS:Linux build (repository-specific addition)
+# Target configuration for CPU:AArch64|OS:Linux build (repository-specific addition leveraging central configuration)
 build:arm64-linux --config=stub
-build:arm64-linux --config=_score_common
-build:arm64-linux --platforms=@score_bazel_platforms//:aarch64-linux-gcc_12.2.0-posix
-build:arm64-linux --extra_toolchains=@score_gcc_aarch64_toolchain//:aarch64-linux-gcc_12.2.0
+build:arm64-linux --config=score-linux-aarch64
 build:arm64-linux --extra_toolchains=@score_toolchains_rust//toolchains/ferrocene:ferrocene_aarch64_unknown_linux_gnu
 build:arm64-linux --extra_toolchains=@score_toolchains_rust//toolchains/ferrocene:ferrocene_aarch64_unknown_linux_gnu_miri
 build:arm64-linux --copt=-mno-outline-atomics
