@@ -45,6 +45,7 @@ ProcessGroupManager::ProcessGroupManager(
     std::unique_ptr<score::mw::lifecycle::internal::watchdog::IWatchdogIf> watchdog)
     : configuration_(std::move(config)),
       process_interface_(),
+      file_waiter_(),
       process_map_(nullptr),
       thread_pool_(nullptr),
       worker_jobs_(nullptr),
@@ -132,13 +133,17 @@ void ProcessGroupManager::deinitialize()
         event_queue_->stop();
     }
     os_handler_.reset();
-    process_monitor_.reset();
     alive_monitor_thread_->stop();
-    graph_.reset();
 
+    // Join the worker threads before destroying the process groups: a worker may
+    // still be (de)activating a ProcessInfoNode owned by a graph, so tearing the
+    // graphs down first would be a use-after-free.
     thread_pool_.reset();
     worker_jobs_.reset();
+
+    graph_.reset();
     process_map_.reset();
+    process_monitor_.reset();
 }
 
 bool ProcessGroupManager::initializeControlClientHandler()
@@ -206,7 +211,7 @@ bool ProcessGroupManager::initializeProcessGroups()
         configuration_.components().size() + configuration_.runTargets().size() + 2,
         configuration_,
         worker_jobs_,
-        ProcessHandling{*supervision_control_notifier_.get(), &process_interface_, process_map_},
+        ProcessHandling{*supervision_control_notifier_.get(), &process_interface_, process_map_, &file_waiter_},
         this);
 
     LM_LOG_DEBUG() << "Process group initialized successfully";
@@ -255,6 +260,7 @@ bool ProcessGroupManager::run()
     bool overflow_logged = false;
 
     if (result)
+    {
         while (!em_cancelled.load())
         {
             // Wait for something to happen...
@@ -284,6 +290,8 @@ bool ProcessGroupManager::run()
 
             watchdog_->serviceWatchdog();
         }
+        LM_LOG_INFO() << "ProcessGroupManager::run() - received SIGTERM, exiting";
+    }
 
     allProcessGroupsOff();
 
@@ -372,11 +380,17 @@ void ProcessGroupManager::allProcessGroupsOff()
     }
 
     LM_LOG_DEBUG() << "Wait for process group to complete the transition";
-    if (!waitForStateCompletion(GraphState::kInTransition, 1000))
+
+    const auto overall_off_transition_timeout = graph_->getOffStateTransitionTimeout() + kMaxSigKillDelay;
+    if (!waitForStateCompletion(
+            GraphState::kInTransition, static_cast<int32_t>(overall_off_transition_timeout.count())))
     {
+        // Last resort: a process ignored even SIGKILL within its budget. Force-kill
+        // whatever is left and tear down the worker pool so shutdown can still proceed.
         LM_LOG_ERROR() << "NOTE: Transition to Off state timed out";
         thread_pool_->stop();
         graph_->forceKillProcesses();
+        thread_pool_.reset();
     }
 }
 
@@ -421,7 +435,7 @@ void ProcessGroupManager::controlClientResponses(Graph& pg)
 bool ProcessGroupManager::sendResponse(ControlClientMessage msg)
 {
     auto pin = getProcessInfoNode(
-        msg.originating_control_client_.process_group_index_, msg.originating_control_client_.process_index_);
+        msg.originating_control_client_.process_group_index_, msg.originating_control_client_.process_identifier_);
     bool ret = true;
 
     if (pin)
@@ -466,8 +480,7 @@ void ProcessGroupManager::controlClientRequests(Graph& pg)
         // Fill in some routing details
         // Single process group at index 0
         scc->request().originating_control_client_.process_group_index_ = 0U;
-        scc->request().originating_control_client_.process_index_ =
-            static_cast<uint16_t>(control_client->getIndex() & 0xFFFFU);
+        scc->request().originating_control_client_.process_identifier_ = control_client->getIdentifier();
 
         LM_LOG_DEBUG() << "ProcessGroupManager::ControlClientHandler: got request"
                        << scc->toString(scc->request().request_or_response_) << "("
@@ -686,11 +699,11 @@ void ProcessGroupManager::setInitialStateTransitionResult(ControlClientCode resu
     ControlClientChannel::nudgeControlClientHandler();
 }
 
-ProcessInfoNode* ProcessGroupManager::getProcessInfoNode(uint32_t pg_index, uint32_t process_index)
+ProcessInfoNode* ProcessGroupManager::getProcessInfoNode(uint32_t pg_index, IdentifierHash process_id)
 {
     if (pg_index == 0U && graph_)
     {
-        return graph_->getProcessInfoNode(process_index);
+        return graph_->getProcessInfoNode(process_id);
     }
 
     return nullptr;

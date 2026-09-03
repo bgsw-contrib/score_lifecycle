@@ -24,6 +24,7 @@
 #include "score/mw/launch_manager/common/identifier_hash.hpp"
 #include "score/mw/launch_manager/configuration/config.hpp"
 #include "score/mw/launch_manager/control/control_client_channel.hpp"
+#include "score/mw/launch_manager/osal/wait_for_file.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/component_event_queue.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/graph.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/itransition_result_publisher.hpp"
@@ -107,9 +108,9 @@ class ProcessGroupManager final : public ITransitionResultPublisher
 
     /// @brief Get a node corresponding to the given process group and process index
     /// @param pg_index The index of the process group in the list of groups managed by this manager
-    /// @param process_index The index of the process in the list of processes in the process group
+    /// @param process_id The identifier of the process
     /// @return nullptr if the node does not exist, otherwise a pointer to the corresponding node.
-    ProcessInfoNode* getProcessInfoNode(uint32_t pg_index, uint32_t process_index);
+    ProcessInfoNode* getProcessInfoNode(uint32_t pg_index, IdentifierHash process_id);
 
     /// @brief set the initial machine group state change result, called by graph when the transition completes
     /// @param result the result to save; it can only be saved once
@@ -242,7 +243,8 @@ class ProcessGroupManager final : public ITransitionResultPublisher
     /// @brief Send all process groups to the "Off" state
     /// @details cancel any Graph for a process group not in the "Off" state, wait for up to 2 seconds for all graphs
     /// to be no longer in the `kCancelled` state, start a transition of remaining process groups to "Off" state,
-    /// and finally wait for up to a second for all graphs to complete.
+    /// and finally wait for all graphs to complete. The final wait is bounded by the largest configured per-process
+    /// shutdown_timeout (plus the SIGKILL grace) so each component's individual shutdown_timeout is respected.
     /// @warning Side effect: Depending if it is needed to forcefully terminate processes, worker jobs might be stopped
     /// after this call
     void allProcessGroupsOff();
@@ -262,6 +264,9 @@ class ProcessGroupManager final : public ITransitionResultPublisher
 
     /// @brief The process interface object associated with the ProcessGroupManager.
     osal::ProcessLauncher process_interface_;
+
+    /// @brief Waits for FileState ready conditions; injected into ProcessInfoNode via ProcessHandling.
+    osal::FileWaiter file_waiter_;
 
     /// @brief Shared pointer to the SafeProcessMap object.
     std::shared_ptr<SafeProcessMap> process_map_;

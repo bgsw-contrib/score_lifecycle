@@ -1,5 +1,5 @@
 # *******************************************************************************
-# Copyright (c) 2025 Contributors to the Eclipse Foundation
+# Copyright (c) 2026 Contributors to the Eclipse Foundation
 #
 # See the NOTICE file(s) distributed with this work for additional
 # information regarding copyright ownership.
@@ -11,19 +11,16 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 
-name: Documentation Cleanup
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("//tests/utils/bazel:integration.bzl", "integration_test")
 
-permissions:
-  contents: write
-  pages: write
-  id-token: write
-
-on:
-  schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight UTC
-
-jobs:
-  docs-cleanup:
-    uses: eclipse-score/cicd-workflows/.github/workflows/docs-cleanup.yml@8d80e8df150cae21d53cbc8031d0f970648f7a67 # v0.0.3
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+cc_binary(
+    name = "file_modifier",
+    srcs = ["file_modifier.cpp"],
+    visibility = ["//tests/integration/ready_conditions/file_state:__subpackages__"],
+    deps = [
+        "//score/launch_manager:lifecycle_cc",
+        "//tests/utils/test_helper",
+        "@googletest//:gtest_main",
+    ],
+)

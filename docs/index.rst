@@ -23,10 +23,11 @@ Module / Feature Documentation
 
    features/index
    manuals/index
+   module/index
    safety_mgt/index
    security_mgt/index
    release/index
-   verification_report/statistics
+   verification_report/index
 
 Component documentation
 ------------------------
