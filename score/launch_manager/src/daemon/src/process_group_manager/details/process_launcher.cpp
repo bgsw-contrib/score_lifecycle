@@ -75,10 +75,7 @@ void setLimit(const int resource, const std::size_t amount, const std::string_vi
         return;
     }
 
-    const struct rlimit limit{
-        .rlim_cur = amount,
-        .rlim_max = amount,
-    };
+    const struct rlimit limit{amount, amount};
 
     applyLimitOrDie(resource, limit, rlimit_name);
 }
@@ -348,13 +345,13 @@ bool ProcessLauncher::setupComms(IpcCommsP& block, int& fd, const configuration:
 
 IpcCommsP ProcessLauncher::initializeControlClient(int& fd, const configuration::ComponentConfig& config)
 {
-    LM_LOG_DEBUG() << "Initialize the control client for" << config.name << " process";
+    LM_LOG_DEBUG() << "Initialize the control client for" << config.name << "process";
     /* Initialise the control client communications */
     IpcCommsP shared_block = nullptr;
     ControlClientChannelP scc = ControlClientChannel::initializeControlClientChannel(fd, &shared_block);
     if (!scc)
     {
-        LM_LOG_ERROR() << "Failed to obtain ControlClientChannel for " << config.name
+        LM_LOG_ERROR() << "Failed to obtain ControlClientChannel for" << config.name
                        << ": initializeControlClientChannel returned nullptr";
         return nullptr;  // Caller will see shared_block maybe null and treat as failure later.
     }
@@ -635,7 +632,7 @@ OsalReturnType ProcessLauncher::waitForkRunning(IpcCommsP sync, std::chrono::mil
     }
     else
     {
-        LM_LOG_WARN() << "Skipping semaphore deinitialization - shared memory region appears invalid: "
+        LM_LOG_WARN() << "Skipping semaphore deinitialization - shared memory region appears invalid:"
                       << errno_message(errno);
     }
 

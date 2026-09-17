@@ -18,6 +18,7 @@
 #include <ctime>
 #include <memory>
 
+#include "score/mw/launch_manager/alive_monitor/IAliveMonitor.hpp"
 #include "score/mw/launch_manager/common/concurrency/mpmc_concurrent_queue.hpp"
 #include "score/mw/launch_manager/common/concurrency/thread_pool.hpp"
 #include "score/mw/launch_manager/common/constants.hpp"
@@ -33,10 +34,8 @@
 #include "score/mw/launch_manager/process_group_manager/details/process_launcher.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/process_monitor.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/safe_process_map.hpp"
-#include "score/mw/launch_manager/process_group_manager/ialive_monitor_thread.hpp"
 #include "score/mw/launch_manager/process_group_manager/iprocess.hpp"
 #include "score/mw/launch_manager/recovery_client/recovery_client.hpp"
-#include "score/mw/launch_manager/supervision_control_client/isupervision_control_notifier.hpp"
 #include "score/mw/launch_manager/watchdog/IWatchdogIf.hpp"
 
 namespace score::mw::lifecycle::internal
@@ -73,11 +72,11 @@ class ProcessGroupManager final : public ITransitionResultPublisher
     /// @param watchdog A unique pointer to an IWatchdogIf instance serviced during the main loop. May be nullptr in
     /// legacy configuration where no watchdog is wired.
     ProcessGroupManager(
-        configuration::Config&& config,
-        std::unique_ptr<IAliveMonitorThread> alive_monitor_thread,
+        GraphConfig&& config,
+        std::unique_ptr<saf::daemon::IAliveMonitor> alive_monitor,
         std::shared_ptr<IRecoveryClient> recovery_client,
-        std::unique_ptr<score::mw::lifecycle::ISupervisionControlNotifier> supervision_control_notifier,
-        std::unique_ptr<score::mw::lifecycle::internal::watchdog::IWatchdogIf> watchdog);
+        std::unique_ptr<score::mw::lifecycle::internal::watchdog::IWatchdogIf> watchdog,
+        std::optional<configuration::WatchdogConfig>&& watchdog_config);
 
     /// @brief Initializes the process group manager.
     /// Sets up a signal handler for SIGINT and SIGTERM so that the main loop of
@@ -244,7 +243,7 @@ class ProcessGroupManager final : public ITransitionResultPublisher
     /// @details cancel any Graph for a process group not in the "Off" state, wait for up to 2 seconds for all graphs
     /// to be no longer in the `kCancelled` state, start a transition of remaining process groups to "Off" state,
     /// and finally wait for all graphs to complete. The final wait is bounded by the largest configured per-process
-    /// shutdown_timeout (plus the SIGKILL grace) so each component's individual shutdown_timeout is respected.
+    /// shutdown_timeout_ms (plus the SIGKILL grace) so each component's individual shutdown_timeout_ms is respected.
     /// @warning Side effect: Depending if it is needed to forcefully terminate processes, worker jobs might be stopped
     /// after this call
     void allProcessGroupsOff();
@@ -260,7 +259,10 @@ class ProcessGroupManager final : public ITransitionResultPublisher
     bool initializeControlClientHandler();
 
     /// @brief The configuration object associated with the ProcessGroupManager.
-    configuration::Config configuration_;
+    GraphConfig configuration_;
+
+    /// @brief The configuration object associated with the watchdog.
+    std::optional<configuration::WatchdogConfig> watchdog_config_;
 
     /// @brief The process interface object associated with the ProcessGroupManager.
     osal::ProcessLauncher process_interface_;
@@ -283,10 +285,7 @@ class ProcessGroupManager final : public ITransitionResultPublisher
     /// @brief Pointer to the gaph.
     std::shared_ptr<Graph> graph_{nullptr};
 
-    /// @brief Process state notifier object used to send data to PHM
-    std::unique_ptr<score::mw::lifecycle::ISupervisionControlNotifier> supervision_control_notifier_;
-
-    std::unique_ptr<IAliveMonitorThread> alive_monitor_thread_;
+    std::unique_ptr<saf::daemon::IAliveMonitor> alive_monitor_;
 
     std::unique_ptr<ProcessMonitor> process_monitor_;
 
