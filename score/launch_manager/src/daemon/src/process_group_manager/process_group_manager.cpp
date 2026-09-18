@@ -19,7 +19,6 @@
 
 #include "score/mw/launch_manager/common/log.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/process_monitor.hpp"
-#include "score/mw/launch_manager/process_group_manager/ialive_monitor_thread.hpp"
 #include "score/mw/launch_manager/process_group_manager/process_group_manager.hpp"
 
 namespace score::mw::lifecycle::internal
@@ -38,18 +37,19 @@ void ProcessGroupManager::cancel()
 }
 
 ProcessGroupManager::ProcessGroupManager(
-    configuration::Config&& config,
-    std::unique_ptr<IAliveMonitorThread> alive_monitor_thread,
+    GraphConfig&& config,
+    std::unique_ptr<saf::daemon::IAliveMonitor> alive_monitor,
     std::shared_ptr<IRecoveryClient> recovery_client,
-    std::unique_ptr<score::mw::lifecycle::ISupervisionControlNotifier> supervision_control_notifier,
-    std::unique_ptr<score::mw::lifecycle::internal::watchdog::IWatchdogIf> watchdog)
+    std::unique_ptr<score::mw::lifecycle::internal::watchdog::IWatchdogIf> watchdog,
+    std::optional<configuration::WatchdogConfig>&& watchdog_config)
     : configuration_(std::move(config)),
+      watchdog_config_(watchdog_config),
       process_interface_(),
+      file_waiter_(),
       process_map_(nullptr),
       thread_pool_(nullptr),
       worker_jobs_(nullptr),
-      supervision_control_notifier_(std::move(supervision_control_notifier)),
-      alive_monitor_thread_(std::move(alive_monitor_thread)),
+      alive_monitor_(std::move(alive_monitor)),
       recovery_client_(recovery_client),
       watchdog_(std::move(watchdog))
 {
@@ -81,11 +81,17 @@ bool ProcessGroupManager::initialize()
         return false;
     }
 
-    const std::size_t total_processes = configuration_.components().size();
+    const std::size_t total_processes = configuration_.components_.size();
 
     if (total_processes > static_cast<uint32_t>(ProcessLimits::kMaxProcesses))
     {
         LM_LOG_ERROR() << "Too many processes";
+        return false;
+    }
+
+    if (!alive_monitor_->init())
+    {
+        LM_LOG_ERROR() << "Alive monitor initialization failed";
         return false;
     }
 
@@ -97,18 +103,13 @@ bool ProcessGroupManager::initialize()
     }
 
     LM_LOG_DEBUG() << "Process Group initialization done";
-    if (!alive_monitor_thread_->start())
-    {
-        LM_LOG_ERROR() << "Alive monitor thread failed to start";
-        return false;
-    }
 
-    const auto watchdog_config = configuration_.takeWatchdog();
+    alive_monitor_->startMonitoring();
 
     // Watchdog config may not be available if no watchdog is configured
-    if (watchdog_config.has_value())
+    if (watchdog_config_.has_value())
     {
-        if (!watchdog_->init(std::move(watchdog_config).value(), score::mw::lifecycle::internal::kMainLoopCycleTimeNs))
+        if (!watchdog_->init(std::move(watchdog_config_).value(), score::mw::lifecycle::internal::kMainLoopCycleTimeNs))
         {
             LM_LOG_ERROR() << "Watchdog initialization failed";
             return false;
@@ -132,13 +133,17 @@ void ProcessGroupManager::deinitialize()
         event_queue_->stop();
     }
     os_handler_.reset();
-    process_monitor_.reset();
-    alive_monitor_thread_->stop();
-    graph_.reset();
+    alive_monitor_->stopMonitoring();
 
+    // Join the worker threads before destroying the process groups: a worker may
+    // still be (de)activating a ProcessInfoNode owned by a graph, so tearing the
+    // graphs down first would be a use-after-free.
     thread_pool_.reset();
     worker_jobs_.reset();
+
+    graph_.reset();
     process_map_.reset();
+    process_monitor_.reset();
 }
 
 bool ProcessGroupManager::initializeControlClientHandler()
@@ -203,10 +208,10 @@ bool ProcessGroupManager::initializeProcessGroups()
 {
     graph_ = std::make_shared<Graph>(
         // size is +2 for fallback + off
-        configuration_.components().size() + configuration_.runTargets().size() + 2,
+        configuration_.components_.size() + configuration_.run_targets_.size() + 2,
         configuration_,
         worker_jobs_,
-        ProcessHandling{*supervision_control_notifier_.get(), &process_interface_, process_map_},
+        ProcessHandling{&process_interface_, process_map_, &file_waiter_, alive_monitor_->getSupervisionFactory()},
         this);
 
     LM_LOG_DEBUG() << "Process group initialized successfully";
@@ -255,6 +260,7 @@ bool ProcessGroupManager::run()
     bool overflow_logged = false;
 
     if (result)
+    {
         while (!em_cancelled.load())
         {
             // Wait for something to happen...
@@ -284,6 +290,8 @@ bool ProcessGroupManager::run()
 
             watchdog_->serviceWatchdog();
         }
+        LM_LOG_INFO() << "ProcessGroupManager::run() - received SIGTERM, exiting";
+    }
 
     allProcessGroupsOff();
 
@@ -311,7 +319,7 @@ bool ProcessGroupManager::startInitialTransition()
 {
     LM_LOG_DEBUG() << "=============STARTING STARTUP STATE============";
     SCORE_LANGUAGE_FUTURECPP_ASSERT_MESSAGE(bool(graph_), "Graph not initialized");
-    graph_->startInitialTransition(IdentifierHash{configuration_.initialRunTarget()});
+    graph_->startInitialTransition(IdentifierHash{configuration_.initial_run_target_});
     return true;
 }
 
@@ -372,11 +380,17 @@ void ProcessGroupManager::allProcessGroupsOff()
     }
 
     LM_LOG_DEBUG() << "Wait for process group to complete the transition";
-    if (!waitForStateCompletion(GraphState::kInTransition, 1000))
+
+    const auto overall_off_transition_timeout = graph_->getOffStateTransitionTimeout() + kMaxSigKillDelay;
+    if (!waitForStateCompletion(
+            GraphState::kInTransition, static_cast<int32_t>(overall_off_transition_timeout.count())))
     {
+        // Last resort: a process ignored even SIGKILL within its budget. Force-kill
+        // whatever is left and tear down the worker pool so shutdown can still proceed.
         LM_LOG_ERROR() << "NOTE: Transition to Off state timed out";
         thread_pool_->stop();
         graph_->forceKillProcesses();
+        thread_pool_.reset();
     }
 }
 
@@ -421,7 +435,7 @@ void ProcessGroupManager::controlClientResponses(Graph& pg)
 bool ProcessGroupManager::sendResponse(ControlClientMessage msg)
 {
     auto pin = getProcessInfoNode(
-        msg.originating_control_client_.process_group_index_, msg.originating_control_client_.process_index_);
+        msg.originating_control_client_.process_group_index_, msg.originating_control_client_.process_identifier_);
     bool ret = true;
 
     if (pin)
@@ -466,8 +480,7 @@ void ProcessGroupManager::controlClientRequests(Graph& pg)
         // Fill in some routing details
         // Single process group at index 0
         scc->request().originating_control_client_.process_group_index_ = 0U;
-        scc->request().originating_control_client_.process_index_ =
-            static_cast<uint16_t>(control_client->getIndex() & 0xFFFFU);
+        scc->request().originating_control_client_.process_identifier_ = control_client->getIdentifier();
 
         LM_LOG_DEBUG() << "ProcessGroupManager::ControlClientHandler: got request"
                        << scc->toString(scc->request().request_or_response_) << "("
@@ -522,8 +535,8 @@ void ProcessGroupManager::handleRecoveryRequest(const IdentifierHash& process_id
     // "fallback", it doesn't actually matter...
     const GraphState graph_state = graph_->getState();
 
-    LM_LOG_DEBUG() << "handleRecoveryRequest: Processing recovery request for process " << process_identifier
-                   << " to state " << recovery_state_;
+    LM_LOG_DEBUG() << "handleRecoveryRequest: Processing recovery request for process" << process_identifier
+                   << "to state" << recovery_state_;
 
     if (GraphState::kInTransition == graph_state)
     {
@@ -559,13 +572,19 @@ void ProcessGroupManager::processStateTransition(ControlClientChannelP scc)
 
     IdentifierHash old_state = graph_->getProcessGroupState();
     GraphState graph_state = graph_->getState();
+    const IdentifierHash requested_state = scc->request().process_group_state_.pg_state_name_;
     scc->request().request_or_response_ = ControlClientCode::kSetStateSuccess;
 
-    if (GraphState::kInTransition == graph_state)
+    if (!graph_->isValidRunTarget(requested_state))
     {
-        if (old_state != scc->request().process_group_state_.pg_state_name_)
+        // Reject before this can reach Graph::startTransition() with no matching node (#541).
+        scc->request().request_or_response_ = ControlClientCode::kSetStateInvalidArguments;
+    }
+    else if (GraphState::kInTransition == graph_state)
+    {
+        if (old_state != requested_state)
         {
-            (void)graph_->setPendingState(scc->request().process_group_state_.pg_state_name_);
+            (void)graph_->setPendingState(requested_state);
             // get state transition start time stamp
             graph_->setRequestStartTime();
             graph_->cancel();
@@ -577,14 +596,14 @@ void ProcessGroupManager::processStateTransition(ControlClientChannelP scc)
             scc->request().request_or_response_ = ControlClientCode::kSetStateTransitionToSameState;
         }
     }
-    else if (GraphState::kSuccess == graph_state && old_state == scc->request().process_group_state_.pg_state_name_)
+    else if (GraphState::kSuccess == graph_state && old_state == requested_state)
     {
         // Already in state
         scc->request().request_or_response_ = ControlClientCode::kSetStateAlreadyInState;
     }
     else
     {
-        (void)graph_->setPendingState(scc->request().process_group_state_.pg_state_name_);
+        (void)graph_->setPendingState(requested_state);
         // get state transition start time stamp
         graph_->setRequestStartTime();
     }
@@ -649,7 +668,9 @@ void ProcessGroupManager::processGroupHandler(Graph& pg)
             pgs.pg_name_ = pg.getProcessGroupName();
             LM_LOG_DEBUG() << "Start transition to" << pgs.pg_state_name_ << "for PG" << pgs.pg_name_;
 
-            pg.startTransition(pgs.pg_state_name_);
+            // Already rejected via isValidRunTarget() in processStateTransition() (#541) if invalid.
+            const bool started = pg.startTransition(pgs.pg_state_name_);
+            SCORE_LANGUAGE_FUTURECPP_ASSERT_MESSAGE(started, "pending state was not rejected by isValidRunTarget()");
         }
 
         if (GraphState::kUndefinedState == pg.getState())
@@ -675,7 +696,8 @@ void ProcessGroupManager::processGroupHandler(Graph& pg)
             // nobody requested this transition, so there is nowhere to communicate an error
             // if we failed and there is no external request, we will try again next time
             pg.setRequestStartTime();
-            pg.startTransition(recovery_state.pg_state_name_);
+            const bool started = pg.startTransition(recovery_state.pg_state_name_);
+            SCORE_LANGUAGE_FUTURECPP_ASSERT_MESSAGE(started, "fallback RunTarget node missing");
         }
     }
 }
@@ -686,11 +708,11 @@ void ProcessGroupManager::setInitialStateTransitionResult(ControlClientCode resu
     ControlClientChannel::nudgeControlClientHandler();
 }
 
-ProcessInfoNode* ProcessGroupManager::getProcessInfoNode(uint32_t pg_index, uint32_t process_index)
+ProcessInfoNode* ProcessGroupManager::getProcessInfoNode(uint32_t pg_index, IdentifierHash process_id)
 {
     if (pg_index == 0U && graph_)
     {
-        return graph_->getProcessInfoNode(process_index);
+        return graph_->getProcessInfoNode(process_id);
     }
 
     return nullptr;

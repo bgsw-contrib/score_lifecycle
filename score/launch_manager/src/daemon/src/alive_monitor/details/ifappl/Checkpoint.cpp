@@ -16,36 +16,23 @@
 namespace score::mw::lifecycle::internal::saf::ifappl
 {
 
-Checkpoint::Checkpoint(
-    const char* const f_checkpointCfgName_p,
-    const uint32_t f_checkpointId,
-    const ifexm::ObservableEvent* f_processState_p) noexcept(false)
-    : Observable<Checkpoint>(),
-      k_configName(f_checkpointCfgName_p),
-      k_checkpointId(f_checkpointId),
-      processState(f_processState_p),
-      isDataLossEvent(false),
-      timestamp(0U)
+Checkpoint::Checkpoint(const ifexm::ObservableEvent* f_processState_p) noexcept(false)
+    : Observable<Checkpoint>(), processState(f_processState_p), isDataLossEvent(false), timestamp(0U)
 {
     static_cast<void>(0U);
 }
 
-uint32_t Checkpoint::getId(void) const noexcept(true)
-{
-    return k_checkpointId;
-}
-
-timers::NanoSecondType Checkpoint::getTimestamp(void) const noexcept(true)
+std::chrono::nanoseconds Checkpoint::getTimestamp(void) const noexcept(true)
 {
     return timestamp;
 }
 
-void Checkpoint::pushData(const timers::NanoSecondType f_timestamp) noexcept(true)
+void Checkpoint::pushData(const std::chrono::nanoseconds f_timestamp) noexcept(true)
 {
     timestamp = f_timestamp;
 
     // If monotonic system clock fails, set data loss event.
-    if (timestamp == 0U)
+    if (timestamp.count() == 0U)
     {
         setDataLossEvent(true);
     }
@@ -61,11 +48,6 @@ void Checkpoint::setDataLossEvent(const bool f_isDataLossEvent) noexcept(true)
 bool Checkpoint::getDataLossEvent(void) const noexcept(true)
 {
     return isDataLossEvent;
-}
-
-std::string_view Checkpoint::getConfigName(void) const noexcept(true)
-{
-    return k_configName;
 }
 
 const ifexm::ObservableEvent* Checkpoint::getProcess(void) const noexcept(true)

@@ -18,15 +18,9 @@
 #include "score/mw/launch_manager/alive_monitor/details/timers/Timers_OsClock.hpp"
 #include <string>
 
-#include "score/mw/launch_manager/supervision_control_client/supervision_event.hpp"
+#include "score/mw/launch_manager/alive_monitor/details/ifexm/supervision_event.hpp"
 
-namespace score
-{
-namespace mw::lifecycle::internal
-{
-namespace saf
-{
-namespace ifexm
+namespace score::mw::lifecycle::internal::saf::ifexm
 {
 
 /// @brief Observable Event
@@ -62,16 +56,13 @@ class ObservableEvent : public saf::common::Observable<ObservableEvent>
     ~ObservableEvent() override = default;
 
     /// @brief Event to observe
-    SupervisionEvent event;
+    SupervisionEvent event{};
 
     /// @brief Push Data
     /// @details Push supervision event related information, which shall be distributed to observers.
     void pushData(void) noexcept;
 };
 
-}  // namespace ifexm
-}  // namespace saf
-}  // namespace mw::lifecycle::internal
-}  // namespace score
+}  // namespace score::mw::lifecycle::internal::saf::ifexm
 
 #endif

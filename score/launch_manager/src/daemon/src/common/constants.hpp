@@ -18,13 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace score
-{
-
-namespace mw::lifecycle
-{
-
-namespace internal
+namespace score::mw::lifecycle::internal
 {
 
 // coverity[autosar_cpp14_a0_1_1_violation:INTENTIONAL] These are constants that are used globally.
@@ -54,6 +48,9 @@ constexpr std::chrono::milliseconds kControlClientMaxIpcDelay{
            ///< kCommunicationError will be returned
 constexpr std::chrono::milliseconds kControlClientBgThreadSleepTime{100};
 
+constexpr std::chrono::milliseconds kDefaultOffStateTransitionTimeout{
+    3000};  ///< Default timeout for Off state transition
+
 constexpr std::int64_t kMainLoopCycleTimeMs{50};  ///< The period at which the main loop services the watchdog
 constexpr std::int64_t kMainLoopCycleTimeNs{kMainLoopCycleTimeMs * 1'000'000LL};
 
@@ -75,10 +72,9 @@ enum class ProcessLimits : std::uint32_t
     maxLocalBuffSize = 32U    ///< Maximum size for local buffer
 };
 
-}  // namespace internal
+/// @brief Default size of Alive Supervision checkpoint buffer
+constexpr uint16_t kDefaultAliveSupCheckpointBufferElements{100U};
 
-}  // namespace mw::lifecycle
-
-}  // namespace score
+}  // namespace score::mw::lifecycle::internal
 
 #endif  // CONSTANTS_HPP_INCLUDED

@@ -29,16 +29,15 @@ AliveImpl::AliveImpl(
     : k_instanceSpecifierPath(f_instanceSpecifier_r), ipcClient(std::move(f_ipcClient))
 {
     // coverity[autosar_cpp14_a15_5_2_violation] This warning comes from pipc-sa(external library)
-    connectToPhmDaemon();
+    connectToAliveMonitor();
 }
 
-void AliveImpl::ReportCheckpoint(std::uint32_t f_checkpointId) const noexcept(true)
+void AliveImpl::ReportCheckpoint() const noexcept(true)
 {
-    (void)ipcClient->sendEmplace(
-        score::mw::lifecycle::internal::saf::timers::OsClock::getMonotonicSystemClock(), f_checkpointId);
+    (void)ipcClient->sendEmplace(internal::saf::timers::OsClock::getMonotonicSystemClock());
 }
 
-void AliveImpl::connectToPhmDaemon(void) noexcept(false)
+void AliveImpl::connectToAliveMonitor(void) noexcept(false)
 {
     const auto ipc_path_res = readInterfacePath();
     if (ipc_path_res == std::nullopt)
@@ -54,11 +53,11 @@ void AliveImpl::connectToPhmDaemon(void) noexcept(false)
     else if (initResult == CheckpointIpcClient::EIpcInitResult::kPermissionDenied)
     {
         const uid_t uid{geteuid()};
-        LM_LOG_ERROR() << "Connection to PHM daemon failed (permission denied for effective uid" << uid
+        LM_LOG_ERROR() << "Connection to Alive Monitor failed (permission denied for effective uid" << uid
                        << "), for the Alive instance (" << k_instanceSpecifierPath << ")";
         return;
     }
-    LM_LOG_ERROR() << "Connection to PHM daemon failed, for the Alive instance (" << k_instanceSpecifierPath << ")";
+    LM_LOG_ERROR() << "Connection to Alive Monitor failed, for the Alive instance (" << k_instanceSpecifierPath << ")";
 }
 
 std::optional<std::string_view> AliveImpl::readInterfacePath() noexcept
