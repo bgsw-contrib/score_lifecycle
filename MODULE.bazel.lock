@@ -11088,7 +11088,7 @@
     "@@score_bazel_cpp_toolchains+//extensions:gcc.bzl%gcc": {
       "general": {
         "bzlTransitiveDigest": "+vgTABLj64cvjmKGlkw+4AJ9S7iLJFRI20t6JpYfRzM=",
-        "usagesDigest": "Upk/hLmFMSVjDfxnY+4849KCD/CDP3LKn2sdo44zvfo=",
+        "usagesDigest": "3xveDDby2EvnKCiFq7prrELyoDGLuBtoirEBRCCvM7Y=",
         "recordedFileInputs": {},
         "recordedDirentsInputs": {},
         "envVariables": {},
@@ -11183,8 +11183,14 @@
               "extra_compile_flags": [],
               "extra_c_compile_flags": [],
               "extra_cxx_compile_flags": [],
-              "extra_known_features": [],
-              "extra_enabled_features": [],
+              "extra_known_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:strict_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:all_wall_warnings"
+              ],
+              "extra_enabled_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:minimal_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:warnings_as_errors"
+              ],
               "extra_link_flags": [],
               "license_info_variable": "",
               "license_info_value": "",
@@ -11210,8 +11216,14 @@
               "extra_compile_flags": [],
               "extra_c_compile_flags": [],
               "extra_cxx_compile_flags": [],
-              "extra_known_features": [],
-              "extra_enabled_features": [],
+              "extra_known_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:strict_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:all_wall_warnings"
+              ],
+              "extra_enabled_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:minimal_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:warnings_as_errors"
+              ],
               "extra_link_flags": [],
               "license_info_variable": "",
               "license_info_value": "",
@@ -11442,8 +11454,14 @@
               "extra_compile_flags": [],
               "extra_c_compile_flags": [],
               "extra_cxx_compile_flags": [],
-              "extra_known_features": [],
-              "extra_enabled_features": [],
+              "extra_known_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:strict_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:all_wall_warnings"
+              ],
+              "extra_enabled_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:minimal_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:warnings_as_errors"
+              ],
               "extra_link_flags": [],
               "license_info_variable": "",
               "license_info_value": "",
@@ -11469,8 +11487,14 @@
               "extra_compile_flags": [],
               "extra_c_compile_flags": [],
               "extra_cxx_compile_flags": [],
-              "extra_known_features": [],
-              "extra_enabled_features": [],
+              "extra_known_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:strict_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:all_wall_warnings"
+              ],
+              "extra_enabled_features": [
+                "@@score_cpp_policies+//warnings/gcc/features:minimal_warnings",
+                "@@score_cpp_policies+//warnings/gcc/features:warnings_as_errors"
+              ],
               "extra_link_flags": [],
               "license_info_variable": "",
               "license_info_value": "",
@@ -11492,6 +11516,11 @@
           }
         },
         "recordedRepoMappingEntries": [
+          [
+            "",
+            "score_cpp_policies",
+            "score_cpp_policies+"
+          ],
           [
             "bazel_tools",
             "rules_cc",
