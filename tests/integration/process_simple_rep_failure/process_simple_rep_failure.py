@@ -10,18 +10,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-from tests.utils.testing_utils.run_until_file_deployed import run_until_file_deployed
 from tests.utils.testing_utils.setup_test import setup_test
+from tests.utils.testing_utils.run_test import run_test
 from tests.utils.testing_utils.test_results import assert_test_results
 from attribute_plugin import add_test_properties
 
 
 @add_test_properties(
-    partially_verifies=[
+    partially_verifies=[],
+    fully_verifies=[
         "feat_req__lifecycle__recov_run_target_switch",
         "feat_req__lifecycle__recovery_action_support",
-    ],
-    fully_verifies=[
+        "feat_req__lifecycle__liveliness_detection",
         "comp_req__launch_man__failure_detect",
     ],
     test_type="requirements-based",
@@ -41,15 +41,11 @@ def test_recovery_action_simple_rep_failure(
     The recovery action switches to the fallback run target, the activation of the fallback run target is verified in the test.
     """
 
-    config_path = str(remote_test_dir / "etc/process_simple_rep_failure.bin")
-
-    run_until_file_deployed(
+    run_test(
         target=target,
         binary_path=str(remote_test_dir / "launch_manager"),
-        file_path=remote_test_dir.parent / "test_end",
+        args=["-c", str(remote_test_dir / "etc/process_simple_rep_failure.bin")],
         cwd=str(remote_test_dir),
-        args=["-c", config_path],
-        timeout_s=10.0,
     )
 
     assert_test_results(

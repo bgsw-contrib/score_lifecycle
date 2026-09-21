@@ -10,21 +10,24 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
-from tests.utils.testing_utils.run_until_file_deployed import run_until_file_deployed
 from tests.utils.testing_utils.setup_test import setup_test
+from tests.utils.testing_utils.run_test import run_test
 from tests.utils.testing_utils.test_results import assert_test_results
 from attribute_plugin import add_test_properties
 
 
 @add_test_properties(
     fully_verifies=[
-        "feat_req__lifecycle__request_run_target_start",
-        "feat_req__lifecycle__switch_run_targets",
-        "comp_req__launch_man__process_state_comm",
-        "feat_req__lifecycle__process_termination",
-        "feat_req__lifecycle__terminationn_dependency",
+        "feat_req__lifecycle__conditional_startup",
+        "feat_req__lifecycle__control_commands",
         "feat_req__lifecycle__process_ordering",
+        "feat_req__lifecycle__process_termination",
+        "feat_req__lifecycle__request_run_target_start",
+        "feat_req__lifecycle__run_target_support",
+        "feat_req__lifecycle__switch_run_targets",
+        "feat_req__lifecycle__terminationn_dependency",
         "comp_req__launch_man__launch_manager_shutdown",
+        "comp_req__launch_man__process_state_comm",
     ],
     test_type="requirements-based",
     derivation_technique="requirements-analysis",
@@ -37,15 +40,11 @@ def test_switch_run_target(target, setup_test, assert_test_results, remote_test_
     Expected Behaviour: During activation resp. deactivation of run_target_a, component B starts before component A, component D is started, component A terminates before component B, and component E (not in the dependency chain) is never launched.
     """
 
-    config_path = str(remote_test_dir / "etc/switch_run_target.bin")
-
-    run_until_file_deployed(
+    run_test(
         target=target,
         binary_path=str(remote_test_dir / "launch_manager"),
-        file_path=remote_test_dir.parent / "test_end",
+        args=["-c", str(remote_test_dir / "etc/switch_run_target.bin")],
         cwd=str(remote_test_dir),
-        args=["-c", config_path],
-        timeout_s=2.0,
     )
 
     # Process E never starts

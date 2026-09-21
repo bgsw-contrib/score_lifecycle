@@ -20,6 +20,8 @@ exports_files(
         "reporting_process.cpp",
         "verification_process.cpp",
         "complex_reporting_process.cpp",
+        "counting_process.cpp",
+        "waiting_process.cpp",
     ],
     visibility = ["//tests:__subpackages__"],
 )
@@ -29,8 +31,15 @@ cc_library(
     hdrs = ["test_helper.hpp"],
     visibility = ["//tests:__subpackages__"],
     deps = [
+        "//score/launch_manager/src/lm_control",
         "@googletest//:gtest_main",
     ],
+)
+
+cc_library(
+    name = "process_utils",
+    hdrs = ["process_utils.hpp"],
+    visibility = ["//tests:__subpackages__"],
 )
 
 cc_binary(
@@ -65,6 +74,17 @@ cc_binary(
 )
 
 cc_binary(
+    name = "process_hanging_on_sigterm",
+    srcs = ["process_hanging_on_sigterm.cpp"],
+    visibility = ["//tests:__subpackages__"],
+    deps = [
+        ":test_helper",
+        "//score/launch_manager:lifecycle_cc",
+        "@googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
     name = "process_crashing_on_startup_n_times",
     srcs = ["process_crashing_on_startup_n_times.cpp"],
     visibility = ["//tests:__subpackages__"],
@@ -72,5 +92,24 @@ cc_binary(
         ":test_helper",
         "//score/launch_manager:lifecycle_cc",
         "@googletest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "counting_process",
+    srcs = ["counting_process.cpp"],
+    visibility = ["//tests:__subpackages__"],
+    deps = [
+        ":test_helper",
+        "//score/launch_manager:lifecycle_cc",
+    ],
+)
+
+cc_binary(
+    name = "waiting_process",
+    srcs = ["waiting_process.cpp"],
+    visibility = ["//tests:__subpackages__"],
+    deps = [
+        ":test_helper",
     ],
 )

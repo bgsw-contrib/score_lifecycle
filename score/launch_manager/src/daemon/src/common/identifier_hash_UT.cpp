@@ -136,6 +136,22 @@ TEST_F(IdentifierHashTest, IdentifierHash_EqualityOperators)
     ASSERT_TRUE(hash1 != differentIdStrView);
 }
 
+TEST_F(IdentifierHashTest, IdentifierHash_HashValueIsStableAcrossCompilersAndProcesses)
+{
+    RecordProperty("Description", "Pins independently-computed FNV-1a values; runs on one target only.");
+    ASSERT_EQ(IdentifierHash("ProcessGroup1/Startup").data(), 8274850808357109446ULL);
+    ASSERT_EQ(IdentifierHash("MachineFG__Startup").data(), 15176715858869822476ULL);
+    ASSERT_EQ(IdentifierHash().data(), 14695981039346656037ULL);  // empty string
+}
+
+TEST_F(IdentifierHashTest, IdentifierHash_ConstructorOverloadsAgreeOnTheSameContent)
+{
+    RecordProperty("Description", "Verify all constructors of IdentifierHash have the same hash.");
+
+    ASSERT_EQ(IdentifierHash().data(), IdentifierHash("").data());
+    ASSERT_EQ(IdentifierHash().data(), IdentifierHash::if_exists("").value().data());
+}
+
 TEST_F(IdentifierHashTest, IdentifierHash_LessThanOperator)
 {
     RecordProperty(
@@ -162,4 +178,30 @@ TEST_F(IdentifierHashTest, IdentifierHash_LessThanOperator)
         ASSERT_FALSE(hash1 < hash2);
         ASSERT_FALSE(hash2 < hash1);
     }
+}
+
+TEST_F(IdentifierHashTest, IdentifierHash_IfExists_Existing_CString)
+{
+    RecordProperty("Description", "Verify that IdentifierHash::if_exists returns the hash when it exists.");
+
+    IdentifierHash("Hello");
+    EXPECT_TRUE(IdentifierHash::if_exists("Hello").has_value());
+}
+
+TEST_F(IdentifierHashTest, IdentifierHash_IfExists_NotExisting_CString)
+{
+    RecordProperty(
+        "Description", "Verify that IdentifierHash::if_exists returns std::nullopt when the hash does not exist.");
+
+    EXPECT_FALSE(IdentifierHash::if_exists("Hello C-string").has_value());
+}
+
+TEST_F(IdentifierHashTest, IdentifierHash_GetName)
+{
+    RecordProperty(
+        "Description",
+        "Verify that IdentifierHash::get_name returns the correct name and does not modify the input object.");
+
+    const IdentifierHash hash{"Joe"};
+    EXPECT_EQ(hash.get_name(), "Joe");
 }

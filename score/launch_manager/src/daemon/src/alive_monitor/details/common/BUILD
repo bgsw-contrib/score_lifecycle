@@ -14,27 +14,6 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 load("//tests/utils/bazel:unit_test.bzl", "lm_cc_test")
 
 cc_library(
-    name = "alive_monitor_config",
-    srcs = ["AliveMonitorConfig.cpp"],
-    hdrs = ["AliveMonitorConfig.hpp"],
-    include_prefix = "score/mw/launch_manager/alive_monitor/details/common",
-    strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/common",
-    visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],
-    deps = [
-        "//score/launch_manager/src/daemon/src/configuration:config",
-    ],
-)
-
-lm_cc_test(
-    name = "alive_monitor_config_UT",
-    srcs = ["AliveMonitorConfig_UT.cpp"],
-    deps = [
-        ":alive_monitor_config",
-        "@googletest//:gtest_main",
-    ],
-)
-
-cc_library(
     name = "observer",
     hdrs = ["Observer.hpp"],
     include_prefix = "score/mw/launch_manager/alive_monitor/details/common",
@@ -46,6 +25,14 @@ cc_library(
 cc_library(
     name = "fixed_size_vector",
     hdrs = ["FixedSizeVector.hpp"],
+    include_prefix = "score/mw/launch_manager/alive_monitor/details/common",
+    strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/common",
+    visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],
+)
+
+cc_library(
+    name = "einitcode",
+    hdrs = ["EInitCode.hpp"],
     include_prefix = "score/mw/launch_manager/alive_monitor/details/common",
     strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/common",
     visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],

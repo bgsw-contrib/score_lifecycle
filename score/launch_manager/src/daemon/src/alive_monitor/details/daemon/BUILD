@@ -13,24 +13,14 @@
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
 cc_library(
-    name = "phm_daemon_config",
-    hdrs = ["PhmDaemonConfig.hpp"],
-    include_prefix = "score/mw/launch_manager/alive_monitor/details/daemon",
-    strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/daemon",
-    visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],
-)
-
-cc_library(
     name = "sw_cluster_handler",
-    srcs = ["SwClusterHandler.cpp"],
-    hdrs = ["SwClusterHandler.hpp"],
+    srcs = ["SupervisionManager.cpp"],
+    hdrs = ["SupervisionManager.hpp"],
     include_prefix = "score/mw/launch_manager/alive_monitor/details/daemon",
     strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/daemon",
     visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],
     deps = [
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/common:alive_monitor_config",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:flat_cfg_factory",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:static_config",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:alive_worker_factory",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/ifappl:checkpoint",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/ifappl:data_structures",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/ifappl:monitor_if_daemon",
@@ -39,22 +29,22 @@ cc_library(
         "//score/launch_manager/src/daemon/src/alive_monitor/details/supervision:alive",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/timers:timers_os_clock",
         "//score/launch_manager/src/daemon/src/common:log",
+        "//score/launch_manager/src/daemon/src/configuration:config",
     ],
 )
 
 cc_library(
-    name = "phm_daemon",
-    srcs = ["PhmDaemon.cpp"],
-    hdrs = ["PhmDaemon.hpp"],
+    name = "cyclic_executor",
+    srcs = ["CyclicExecutor.cpp"],
+    hdrs = ["CyclicExecutor.hpp"],
     include_prefix = "score/mw/launch_manager/alive_monitor/details/daemon",
     strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/daemon",
     visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],
     deps = [
-        ":phm_daemon_config",
         ":sw_cluster_handler",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/common:alive_monitor_config",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:flat_cfg_factory",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:static_config",
+        "//score/launch_manager/src/daemon/src/alive_monitor:isupervision_factory",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/common:einitcode",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:alive_worker_factory",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/ifappl:monitor_if_daemon",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/ifexm:observable_event_reader",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/supervision:alive",
@@ -66,15 +56,6 @@ cc_library(
 )
 
 cc_library(
-    name = "i_health_monitor",
-    hdrs = ["IAliveMonitor.hpp"],
-    include_prefix = "score/mw/launch_manager/alive_monitor/details/daemon",
-    strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/daemon",
-    visibility = ["//score/launch_manager/src/daemon:__subpackages__"],
-    deps = [":phm_daemon"],
-)
-
-cc_library(
     name = "health_monitor_impl",
     srcs = ["AliveMonitorImpl.cpp"],
     hdrs = ["AliveMonitorImpl.hpp"],
@@ -82,9 +63,10 @@ cc_library(
     strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/daemon",
     visibility = ["//score/launch_manager/src/daemon:__subpackages__"],
     deps = [
-        ":i_health_monitor",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/common:alive_monitor_config",
+        ":cyclic_executor",
+        "//score/launch_manager/src/daemon/src/alive_monitor:i_alive_monitor",
         "//score/launch_manager/src/daemon/src/configuration:config",
         "@score_baselibs//score/language/futurecpp",
+        "@score_baselibs//score/os/utils:thread",
     ],
 )

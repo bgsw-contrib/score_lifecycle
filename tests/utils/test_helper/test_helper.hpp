@@ -14,9 +14,14 @@
 #define TESTS_UTILS_TEST_HELPER_HPP
 
 #include <gtest/gtest.h>
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <thread>
+
+#include <score/mw/lifecycle/ilm_control.hpp>
 
 /// @return File path to an xml adjacent to the input file path
 inline std::string xmlPath(const std::string_view file)
@@ -55,10 +60,6 @@ inline std::string crashCountPath(const int crashes_until_success)
 {
     return std::string{crash_count_file} + "_" + std::to_string(crashes_until_success);
 }
-
-/// @brief Where to store the test_end signal file. This must be kept consistent with where the test framework
-/// searches for files.
-constexpr std::string_view test_end_location = "../test_end";
 
 /// @brief Call at the start of a test to check for leftover files from a previous run
 /// Files can be leftover when running manually on the host system, but otherwise are cleaned up
@@ -155,11 +156,7 @@ class TestRunner
 
         if (m_termination_notification == TerminationNotification::kTestEnd)
         {
-            const auto res = touch_file(test_end_location);
-            if (!res)
-            {
-                std::cerr << res.failure_message() << std::endl;
-            }
+            assert(kill(getppid(), SIGTERM) == 0);
         }
     }
 
@@ -170,12 +167,49 @@ class TestRunner
     int RunTests()
     {
         ::testing::GTEST_FLAG(output) = "xml:" + xmlPath(m_test_path);
+        ::testing::GTEST_FLAG(brief) = true;
         testing::InitGoogleTest();
 
         auto res = RUN_ALL_TESTS();
 
         return res;
     }
+};
+
+using score::mw::lifecycle::RunTargetActivationSource;
+using score::mw::lifecycle::RunTargetName;
+
+bool event_received = false;
+RunTargetActivationSource event_source;
+RunTargetName event_target;
+std::mutex event_mutex;
+std::condition_variable event_condition;
+
+void push_event(RunTargetActivationSource source, RunTargetName target)
+{
+    {
+        std::unique_lock event_lock(event_mutex);
+        event_condition.wait(event_lock, [&] {
+            return !event_received;
+        });
+        event_received = true;
+        event_source = source;
+        event_target = target;
+    }
+    event_condition.notify_one();
+};
+
+void pop_event(std::function<void(RunTargetActivationSource source, RunTargetName target)> callback)
+{
+    {
+        std::unique_lock event_lock(event_mutex);
+        event_condition.wait(event_lock, [&] {
+            return event_received;
+        });
+        callback(event_source, event_target);
+        event_received = false;
+    }
+    event_condition.notify_one();
 };
 
 #endif  // TESTS_UTILS_TEST_HELPER_HPP

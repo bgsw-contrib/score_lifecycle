@@ -17,16 +17,7 @@
 #include "score/mw/launch_manager/process_group_manager/iprocess.hpp"
 #include <atomic>
 
-namespace score
-{
-
-namespace mw::lifecycle
-{
-
-namespace internal
-{
-
-namespace osal
+namespace score::mw::lifecycle::internal::osal
 {
 
 /// @brief POSIX implementation of IProcess, managing child processes via fork/exec.
@@ -51,6 +42,9 @@ class ProcessLauncher final : public IProcess
     /// @see IProcess::waitForkRunning() for details
     OsalReturnType waitForkRunning(IpcCommsP sync, std::chrono::milliseconds timeout) override;
 
+    /// @see IProcess::waitForkRunning() for details
+    OsalReturnType ignoreRunning(IpcCommsP sync) override;
+
   private:
     /// @brief Creates shared memory for communication between processes.
     /// @param[in,out] sync Pointer to a location to store a pointer to a structure containing
@@ -67,14 +61,6 @@ class ProcessLauncher final : public IProcess
     /// @return True if semaphore initialization is successful, false otherwise.
     bool initializeSemaphores(IpcCommsP block);
 
-    /// @brief Initializes the Control Client for communication using the shared memory block.
-    /// @param[in,out] fd Reference to store the file descriptor of the shared memory.
-    /// @param[in] config Pointer to the configuration for initializing the Control Client.
-    /// @return None.
-    IpcCommsP initializeControlClient(
-        int& fd,
-        const score::mw::lifecycle::internal::configuration::ComponentConfig& config);
-
     /// @brief Handles the execution of the child process after forking.
     /// @param[in] param Reference to child process configuration.
     void handleChildProcess(ChildProcessConfig& param);
@@ -89,12 +75,6 @@ class ProcessLauncher final : public IProcess
     std::atomic_uint32_t shm_name_counter = {0};
 };
 
-}  // namespace osal
-
-}  // namespace internal
-
-}  // namespace mw::lifecycle
-
-}  // namespace score
+}  // namespace score::mw::lifecycle::internal::osal
 
 #endif  // PROCESS_LAUNCHER_HPP_INCLUDED

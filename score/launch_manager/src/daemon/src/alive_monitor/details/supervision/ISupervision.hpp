@@ -17,17 +17,12 @@
 #include <cstdint>
 
 #include "score/mw/launch_manager/alive_monitor/details/timers/Timers_OsClock.hpp"
+#include "score/mw/launch_manager/common/identifier_hash.hpp"
 #include <string>
 #include <string_view>
 #include <vector>
 
-namespace score
-{
-namespace mw::lifecycle::internal
-{
-namespace saf
-{
-namespace supervision
+namespace score::mw::lifecycle::internal::saf::supervision
 {
 
 /// @brief ISupervision
@@ -40,9 +35,8 @@ class ISupervision
     ISupervision() = delete;
 
     /// @brief Constructor
-    /// @param [in] f_supervisionConfigName_p       Unique name set by configuration
-    /// @warning    Constructor may throw std::exceptions
-    explicit ISupervision(const char* const f_supervisionConfigName_p) noexcept(false);
+    /// @param [in] f_supervisionConfigName_p       Unique hashed name set by configuration
+    explicit ISupervision(const IdentifierHash f_supervisionConfigName_p) noexcept(true);
 
     /// @brief Default destructor
     /* RULECHECKER_comment(0, 3, check_min_instructions, "Default destructor is not provided\
@@ -54,11 +48,11 @@ class ISupervision
     /// This method tells the supervision that all supervision interfaces were queried for new data
     /// and the collected data (checkpoints) is now ready for evaluation.
     /// @param [in] f_syncTimestamp   Timestamp for cyclic synchronization
-    virtual void evaluate(const timers::NanoSecondType f_syncTimestamp) = 0;
+    virtual void evaluate(const std::chrono::nanoseconds f_syncTimestamp) = 0;
 
     /// @brief Get the name of the configuration element for the corresponding supervision container
-    /// @return std::string_view   View over the name of the corresponding supervision configuration container
-    std::string_view getConfigName(void) const noexcept;
+    /// @return The hashed name of the corresponding supervision configuration container
+    IdentifierHash getConfigName(void) const noexcept;
 
   protected:
     /// @brief Default Move Constructor
@@ -78,12 +72,9 @@ class ISupervision
 
   private:
     /// Unique name set by configuration
-    const std::string k_cfgName;
+    const IdentifierHash k_cfgName;
 };
 
-}  // namespace supervision
-}  // namespace saf
-}  // namespace mw::lifecycle::internal
-}  // namespace score
+}  // namespace score::mw::lifecycle::internal::saf::supervision
 
 #endif

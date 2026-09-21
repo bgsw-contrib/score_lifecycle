@@ -26,33 +26,40 @@
 
 #include "score/mw/launch_manager/common/concurrency/mpmc_concurrent_queue.hpp"
 #include "score/mw/launch_manager/common/identifier_hash.hpp"
+#include "score/mw/launch_manager/common/process_group_state_id.hpp"
 #include "score/mw/launch_manager/configuration/config.hpp"
-#include "score/mw/launch_manager/control/control_client_channel.hpp"
 #include "score/mw/launch_manager/osal/semaphore.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/component_event.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/component_of.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/component_task.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/dependency_graph.hpp"
-#include "score/mw/launch_manager/process_group_manager/details/itransition_result_publisher.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/process_handling.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/process_info_node.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/run_target.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/transition.hpp"
 #include "score/mw/launch_manager/process_group_manager/iprocess.hpp"
-#include "score/mw/launch_manager/supervision_control_client/isupervision_event_publisher.hpp"
+#include "score/mw/launch_manager/process_group_manager/irun_target_control.hpp"
+#include "score/mw/lifecycle/details/lm_control_service.h"
 #include <score/stop_token.hpp>
 
-namespace score
-{
-
-namespace mw::lifecycle
-{
-
-namespace internal
+namespace score::mw::lifecycle::internal
 {
 
 using WorkerQueue =
     MPMCConcurrentQueue<std::optional<ComponentTask>, static_cast<std::size_t>(ProcessLimits::kMaxProcesses)>;
+
+/// @brief Config members needed to build the graph
+struct GraphConfig
+{
+    /// @brief Components that run targets may depend on
+    std::vector<configuration::ComponentConfig> components_;
+    /// @brief Run targets that can be activated
+    std::vector<configuration::RunTargetConfig> run_targets_;
+    /// @brief Information about the run target transitioned to in the event of an error
+    configuration::FallbackRunTargetConfig fallback_run_target_;
+    /// @brief Name of the first run target to launch
+    std::string initial_run_target_;
+};
 
 /// @brief GraphState - the graph/process group state.
 /// @details Enumeration representing the state of the graph.
@@ -155,13 +162,15 @@ class Graph final
 
     /// @brief Constructor to initialize a Graph object.
     /// @param max_num_nodes Maximum number of nodes this graph can hold.
+    /// @param configuration Configuration containing run target and component information.
+    /// @param job_queue Queue to push component jobs to for multithreaded processing.
     /// @param process_handling The interfaces used to start, stop and report on the OS processes.
+    /// @param transition_result_receiver Object to notify when the initial transition is complete.
     Graph(
         uint32_t max_num_nodes,
-        configuration::Config& configuration,
+        GraphConfig& configuration,
         std::shared_ptr<WorkerQueue> job_queue,
-        ProcessHandling process_handling,
-        ITransitionResultPublisher* transition_result_receiver);
+        ProcessHandling process_handling);
 
     /// @brief Destructor to clean up resources used by the Graph object.
     ~Graph();
@@ -178,14 +187,7 @@ class Graph final
     /// @brief Move assignment operator(deleted).
     Graph& operator=(Graph&&) noexcept = delete;
 
-    /// @brief Applies a ComponentEvent — produced by ProcessMonitor from worker/OS-handler thread
-    /// callbacks and drained on the main thread — to this graph.
-    /// @details Dispatches on the event's variant:
-    ///   - ActivationSuccessful / DeactivationComplete: `nodeExecuted(node_index, {})`
-    ///   - ActivationFailed: `nodeExecuted(node_index, make_unexpected(reason))`
-    ///   - UnexpectedTermination: `abort(1, kErrorAfterReady)` — ProcessMonitor::terminated() only
-    ///     pushes this event once a process has already reached its ready condition, so it is
-    ///     always a post-ready crash.
+    /// @brief Applies a ComponentEvent to this graph.
     /// @param event The event to process.
     void handleComponentEvent(const ComponentEvent& event);
 
@@ -195,10 +197,14 @@ class Graph final
     void cancel();
 
     /// @brief Begin transitioning this process group to the given state.
-    /// Returns false if the state name was not found in the configuration or if the graph
-    /// could not enter kInTransition (for example, because a cancellation is in progress).
+    /// @return False if pg_state is not a recognized run target in this graph's configuration; the
+    /// transition is not started in that case. True otherwise.
     /// @param pg_state The target process group state.
-    void startTransition(IdentifierHash pg_state);
+    bool startTransition(IdentifierHash pg_state);
+
+    /// @return True if pg_state is a run target known to this graph's configuration.
+    /// @param pg_state The process group state to check.
+    bool isValidRunTarget(IdentifierHash pg_state);
 
     /// @brief Begin the initial machine group startup transition.
     /// Behaves like startTransition but also reports the initial state transition result
@@ -220,7 +226,7 @@ class Graph final
     /// @param process_index Index of the process node to retrieve.
     /// @return The ProcessInfoNode at the given index, or nullptr if out of bounds or if the node
     /// at that index is a RunTarget rather than a ProcessInfoNode.
-    ProcessInfoNode* getProcessInfoNode(uint32_t process_index);
+    ProcessInfoNode* getProcessInfoNode(IdentifierHash process_index);
 
     /// @return The identifier of the process group managed by this graph.
     IdentifierHash getProcessGroupName();
@@ -229,18 +235,8 @@ class Graph final
     /// getState() returns GraphState::kSuccess.
     IdentifierHash getProcessGroupState();
 
-    /// @return The ProcessInfoNode that has a ControlClientChannel, or nullptr if none exists.
-    const ProcessInfoNode* findControlClient();
-
-    /// @brief Sets the control client that is managing state transitions for this process group.
-    /// @param control_client_id The identifier of the new state manager.
-    void setStateManager(ControlClientID& control_client_id);
-
     /// @brief Update the details for the cancel message to match the current state.
     void updateCancelMessage();
-
-    /// @return Information about the control client managing this process group's state.
-    ControlClientID getStateManager();
 
     /// @return The error code set by the last process that caused an unexpected termination.
     uint32_t getLastExecutionError();
@@ -257,20 +253,6 @@ class Graph final
     /// @return The pending state, or an empty hash if no state is pending.
     IdentifierHash getPendingState();
 
-    /// @return The pending event code, or kNotSet if there is none.
-    ControlClientCode getPendingEvent();
-
-    /// @brief Clears the pending event, but only if its current value matches expected.
-    /// @param expected The event code to compare against.
-    void clearPendingEvent(ControlClientCode expected);
-
-    /// @brief Stores a pending event code and notifies the ProcessGroupManager to process it.
-    /// @param event The event code to store.
-    void setPendingEvent(ControlClientCode event);
-
-    /// @return The cancel message prepared when updateCancelMessage() was called.
-    ControlClientMessage& getCancelMessage();
-
     /// @brief A utility function that converts codes to strings for logging purposes
     /// @param state The state to convert
     /// @return A string representing the state
@@ -285,10 +267,19 @@ class Graph final
     /// @brief For forced shutdown, kill all leftover processes
     void forceKillProcesses();
 
+    /// @brief Returns the configured transition timeout for the Off state
+    /// @details This is the timeout configured for the RunTarget named "Off" in the configuration, or a default value
+    /// if not configured.
+    /// @return The timeout in milliseconds, or zero if there is no configured timeout.
+    std::chrono::milliseconds getOffStateTransitionTimeout() const;
+
+    /// @brief Register a callback to be fired when the active run target changes.
+    void registerActiveRunTargetCallback(ActivationCallbackT callback) noexcept;
+
   private:
     /// @brief Reports that a node has finished executing, enqueuing successors or updating the graph state if a
     /// transition has finished.
-    void nodeExecuted(uint32_t node, score::cpp::expected_blank<IComponent::ComponentError> error);
+    void nodeExecuted(IdentifierHash node, score::cpp::expected_blank<IComponent::ComponentError> error);
 
     /// @brief Abort the current transition due to a process error.
     /// @deprecated @param code The execution error for the process that caused the abort.
@@ -299,9 +290,6 @@ class Graph final
     /// @param new_state The new state to set for the graph.
     /// @returns False if the requested state was not set
     bool setState(GraphState new_state);
-
-    /// @return The index of the RunTarget node for @p pg_state, or -1 if not found.
-    int32_t getRunTargetIndex(IdentifierHash pg_state) const;
 
     /// @brief Pushes the given task onto the worker queue while the graph is in transition.
     /// Retries on timeout.
@@ -332,15 +320,13 @@ class Graph final
 
     /// @brief Nodes for all unique processes in this process group, plus a virtual RunTarget node
     /// per configured ProcessGroupState.
-    DependencyGraph<Component> nodes_;
-
-    std::unordered_map<std::size_t, GraphIndex> run_targets_{};
+    DependencyGraph<IdentifierHash, Component> nodes_;
 
     /// @brief Builder for creating the transition object for the current state transition.
-    TransitionBuilder<Component> transition_builder_;
+    TransitionBuilder<IdentifierHash, Component> transition_builder_;
 
     /// @brief The currently active transition or nullptr before the first one starts.
-    Transition<Component>* current_transition_{nullptr};
+    Transition<IdentifierHash, Component>* current_transition_{nullptr};
 
     /// @brief Current state of the graph.
     GraphState state_{GraphState::kSuccess};
@@ -352,7 +338,7 @@ class Graph final
     mutable std::mutex requested_state_mutex_{};
 
     /// @brief Config pointer to set up graph nodes
-    configuration::Config& configuration_;
+    GraphConfig& configuration_;
 
     /// @brief Queue to push component tasks to
     std::shared_ptr<WorkerQueue> job_queue_;
@@ -360,29 +346,11 @@ class Graph final
     /// @brief The interfaces passed to the process nodes to control their OS processes
     ProcessHandling process_handling_;
 
-    /// @brief Class to receive information about the initial state transition result
-    ITransitionResultPublisher* transition_result_receiver_;
-
-    /// @brief The state manager node for this process group
-    ControlClientID last_state_manager_{};
-
-    /// @brief The last execution error set on an unexpected termination
-    uint32_t last_execution_error_{0U};
-
     /// @brief Set the true if this is the MainPG and this is the initial state transition
     bool is_initial_state_transition_{false};
 
     /// @brief The pending state transition, if any
     IdentifierHash pending_state_{""};
-
-    /// @brief Any pending event to report
-    ControlClientCode event_{ControlClientCode::kNotSet};
-
-    /// @brief Reason that tha graph was aborted
-    ControlClientCode abort_code_{ControlClientCode::kNotSet};
-
-    /// @brief The message to send when a transition is cancelled
-    ControlClientMessage cancel_message_{};
 
     /// @brief Constant for Off state.
     const IdentifierHash off_state_{"Off"};
@@ -392,12 +360,13 @@ class Graph final
 
     /// @brief Stop token generator for transitions.
     score::cpp::stop_source stop_source_;
+
+    /// @brief Transition timeout for Off state
+    std::chrono::milliseconds off_state_transition_timeout_{0};
+
+    std::optional<ActivationCallbackT> active_run_target_callback_;
 };
 
-}  // namespace internal
-
-}  // namespace mw::lifecycle
-
-}  // namespace score
+}  // namespace score::mw::lifecycle::internal
 
 #endif  /// GRAPH_HPP_INCLUDED

@@ -24,7 +24,6 @@
 
 #include "score/mw/launch_manager/common/log.hpp"
 #include "score/mw/launch_manager/common/signal_safe_log.hpp"
-#include "score/mw/launch_manager/control/control_client_channel.hpp"
 #include "score/mw/launch_manager/osal/ipc_comms.hpp"
 #include "score/mw/launch_manager/osal/security_policy.hpp"
 #include "score/mw/launch_manager/osal/set_affinity.hpp"
@@ -75,10 +74,7 @@ void setLimit(const int resource, const std::size_t amount, const std::string_vi
         return;
     }
 
-    const struct rlimit limit{
-        .rlim_cur = amount,
-        .rlim_max = amount,
-    };
+    const struct rlimit limit{amount, amount};
 
     applyLimitOrDie(resource, limit, rlimit_name);
 }
@@ -88,7 +84,6 @@ void handleComms(score::mw::lifecycle::internal::osal::ChildProcessConfig& param
 {
     // kNoComms !fd3 & !fd4
     // kReporting  fd3 & !fd4
-    // kControlClient  fd3 & fd4
     if (!param.shared_block)
     {
         // kNoComms, fds are CLOEXEC
@@ -98,7 +93,7 @@ void handleComms(score::mw::lifecycle::internal::osal::ChildProcessConfig& param
     param.fd = dup2(param.fd, param.shared_block->sync_fd);  // always make sure we are using fd=3
     param.shared_block->pid_ = getpid();                     // Store pid for check at client end
 
-    // It must be ensured that sync_fd (f3) and control_client_handler_nudge_fd (fd4) remain open depending on
+    // It must be ensured that sync_fd (f3) remains open depending on
     // the communication type. Flag FD_CLOEXEC is cleared conditionally to ensure that the
     // respective file descriptor remains open after the execve call.
     switch (param.shared_block->comms_type_)
@@ -108,19 +103,6 @@ void handleComms(score::mw::lifecycle::internal::osal::ChildProcessConfig& param
             break;
         case CommsType::kReporting:
             if (-1 == fcntl(IpcCommsSync::sync_fd, F_SETFD, 0))
-            {
-                static_cast<void>(signal_safe_log_errno(errno, "fcntl at line ", __LINE__, " failed"));
-                sysexit(EXIT_FAILURE);
-            }
-            close(IpcCommsSync::control_client_handler_nudge_fd);
-            break;
-        case CommsType::kControlClient:
-            if (-1 == fcntl(IpcCommsSync::sync_fd, F_SETFD, 0))
-            {
-                static_cast<void>(signal_safe_log_errno(errno, "fcntl at line ", __LINE__, " failed"));
-                sysexit(EXIT_FAILURE);
-            }
-            if (-1 == fcntl(IpcCommsSync::control_client_handler_nudge_fd, F_SETFD, 0))
             {
                 static_cast<void>(signal_safe_log_errno(errno, "fcntl at line ", __LINE__, " failed"));
                 sysexit(EXIT_FAILURE);
@@ -271,10 +253,6 @@ bool ProcessLauncher::setupComms(IpcCommsP& block, int& fd, const configuration:
     const auto app_type = config.component_properties.application_profile.application_type;
 
     size_t length = sizeof(IpcCommsSync);
-    if (configuration::ApplicationType::StateManager == app_type)
-    {
-        length += sizeof(ControlClientChannel);
-    }
 
     constexpr std::string_view kShmNamePrefix{"/ipc_shared_mem"};
     std::array<char, static_cast<std::size_t>(ProcessLimits::maxLocalBuffSize)> shm_name{};
@@ -313,8 +291,7 @@ bool ProcessLauncher::setupComms(IpcCommsP& block, int& fd, const configuration:
         return false;
     }
 
-    block = (configuration::ApplicationType::StateManager == app_type) ? initializeControlClient(fd, config)
-                                                                       : IpcCommsSync::getCommsObject(fd);
+    block = IpcCommsSync::getCommsObject(fd);
     if (!block)
     {
         return false;
@@ -323,9 +300,6 @@ bool ProcessLauncher::setupComms(IpcCommsP& block, int& fd, const configuration:
     // Map application type to CommsType for backward compatibility
     switch (app_type)
     {
-        case configuration::ApplicationType::StateManager:
-            block->comms_type_ = CommsType::kControlClient;
-            break;
         case configuration::ApplicationType::Native:
             block->comms_type_ = CommsType::kNoComms;
             break;
@@ -344,22 +318,6 @@ bool ProcessLauncher::setupComms(IpcCommsP& block, int& fd, const configuration:
     }
 
     return true;
-}
-
-IpcCommsP ProcessLauncher::initializeControlClient(int& fd, const configuration::ComponentConfig& config)
-{
-    LM_LOG_DEBUG() << "Initialize the control client for" << config.name << " process";
-    /* Initialise the control client communications */
-    IpcCommsP shared_block = nullptr;
-    ControlClientChannelP scc = ControlClientChannel::initializeControlClientChannel(fd, &shared_block);
-    if (!scc)
-    {
-        LM_LOG_ERROR() << "Failed to obtain ControlClientChannel for " << config.name
-                       << ": initializeControlClientChannel returned nullptr";
-        return nullptr;  // Caller will see shared_block maybe null and treat as failure later.
-    }
-    scc->initialize();
-    return shared_block;
 }
 
 bool ProcessLauncher::initializeSemaphores(IpcCommsP shared_block)
@@ -577,49 +535,66 @@ OsalReturnType ProcessLauncher::waitForTermination(osal::ProcessID& pid, int32_t
     return result;
 }
 
+OsalReturnType ProcessLauncher::ignoreRunning(IpcCommsP sync)
+{
+    if (!sync)
+    {
+        LM_LOG_ERROR() << "Invalid shared memory pointer: The shared memory pointer is null.";
+        return OsalReturnType::kFail;
+    }
+
+    const auto post_res = sync->reply_sync_.post();
+    if (post_res == OsalReturnType::kFail)
+    {
+        LM_LOG_ERROR() << "Semaphore post failed";
+        return OsalReturnType::kFail;
+    }
+    return OsalReturnType::kSuccess;
+}
+
 OsalReturnType ProcessLauncher::waitForkRunning(IpcCommsP sync, std::chrono::milliseconds timeout)
 {
     OsalReturnType result = OsalReturnType::kSuccess;
 
-    if (sync)
+    if (!sync)
     {
-        if ((sync->send_sync_.timedWait(timeout) == OsalReturnType::kFail) ||
-            (sync->reply_sync_.post() == OsalReturnType::kFail))
-        {
-            LM_LOG_ERROR() << "Semaphore timedWait or post failed: Unable to wait or post on semaphores within the "
-                              "specified timeout.";
-            result = OsalReturnType::kFail;
-        }
-        else
-        {
-            result = sync->send_sync_.timedWait(std::chrono::milliseconds(100));
-        }
+        LM_LOG_ERROR() << "Invalid shared memory pointer: The shared memory pointer is null.";
+        return OsalReturnType::kFail;
+    }
 
-        // We are not interested in the result of msync, just whether it worked or not.
-        // If it did not work, the child process has probably crashed and corrupted the shared memory
-        // so we should not try to deinitialize the semaphores.
-        // mincore would be more appropriate here, but is not available on QNX
-        if (msync(sync.get(), sizeof(IpcCommsSync), MS_ASYNC) == 0)
+    const auto time_res = sync->send_sync_.timedWait(timeout);
+    const auto post_res = sync->reply_sync_.post();
+
+    if ((time_res == OsalReturnType::kFail) || (post_res == OsalReturnType::kFail))
+    {
+        LM_LOG_ERROR() << "Semaphore timedWait or post failed: Unable to wait or post on semaphores within the "
+                          "specified timeout.";
+        result = OsalReturnType::kFail;
+    }
+    else
+    {
+        result = sync->send_sync_.timedWait(std::chrono::milliseconds(100));
+    }
+
+    // We are not interested in the result of msync, just whether it worked or not.
+    // If it did not work, the child process has probably crashed and corrupted the shared memory
+    // so we should not try to deinitialize the semaphores.
+    // mincore would be more appropriate here, but is not available on QNX
+    if (msync(sync.get(), sizeof(IpcCommsSync), MS_ASYNC) == 0)
+    {
+        if (sync->send_sync_.deinit() != OsalReturnType::kSuccess)
         {
-            if (sync->send_sync_.deinit() != OsalReturnType::kSuccess)
-            {
-                LM_LOG_WARN() << "Failed to deinitialize send_sync semaphore.";
-            }
-            if (sync->reply_sync_.deinit() != OsalReturnType::kSuccess)
-            {
-                LM_LOG_WARN() << "Failed to deinitialize reply_sync semaphore.";
-            }
+            LM_LOG_WARN() << "Failed to deinitialize send_sync semaphore.";
         }
-        else
+        if (sync->reply_sync_.deinit() != OsalReturnType::kSuccess)
         {
-            LM_LOG_WARN() << "Skipping semaphore deinitialization - shared memory region appears invalid: "
-                          << errno_message(errno);
+            LM_LOG_WARN() << "Failed to deinitialize reply_sync semaphore.";
         }
     }
     else
     {
-        LM_LOG_ERROR() << "Invalid shared memory pointer: The shared memory pointer is null.";
-        result = OsalReturnType::kFail;
+        LM_LOG_WARN() << "Skipping semaphore deinitialization - shared memory region appears invalid:"
+                      << errno_message(errno);
     }
 
     return result;

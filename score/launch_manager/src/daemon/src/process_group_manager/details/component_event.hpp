@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <variant>
 
+#include "score/concurrency/future/interruptible_promise.h"
 #include "score/mw/launch_manager/common/identifier_hash.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/icomponent.hpp"
 
@@ -26,38 +27,60 @@ namespace score::mw::lifecycle::internal
 /// @brief A node finished activating successfully.
 struct [[nodiscard]] ActivationSuccessful
 {
-    uint32_t node_index;
+    /// @brief The identifier of the node that activated.
+    IdentifierHash node_identifier;
 };
 
 /// @brief A node failed to activate.
 struct [[nodiscard]] ActivationFailed
 {
-    uint32_t node_index;
+    /// @brief The identifier of the node that failed.
+    IdentifierHash node_identifier;
+    /// @brief Description of the error.
     IComponent::ComponentError reason;
 };
 
 /// @brief A node finished deactivating.
 struct [[nodiscard]] DeactivationComplete
 {
-    uint32_t node_index;
+    /// @brief The identifier of the node that deactivated.
+    IdentifierHash node_identifier;
 };
 
 /// @brief A node terminated without having been requested to.
 struct [[nodiscard]] UnexpectedTermination
 {
-    uint32_t node_index;
+    /// @brief The identifier of the node that terminated.
+    IdentifierHash node_identifier;
+    /// @brief Description of the error.
+    IComponent::ComponentError reason;
 };
 
 /// @brief A job was queued but cancelled by the time it was processed
 struct [[nodiscard]] JobSkipped
 {
-    uint32_t node_index;
+    /// @brief The identifier of the node that was skipped.
+    IdentifierHash node_identifier;
 };
 
 /// @brief Alive supervision has failed for the given process identifier.
 struct [[nodiscard]] SupervisionFailure
 {
+    /// @brief The identifier of the node that failed.
     IdentifierHash process_identifier;
+};
+
+/// @brief The state manager wants to know which run target is currently active.
+struct [[nodiscard]] GetActiveRunTarget
+{
+    concurrency::InterruptiblePromise<Result<IdentifierHash>> promise;
+};
+
+/// @brief The state manager wants to change to a different run target.
+struct [[nodiscard]] SetRequestedRunTarget
+{
+    IdentifierHash run_target;
+    concurrency::InterruptiblePromise<Result<void>> promise;
 };
 
 /// @brief A graph-relevant state change. There is only ever a single graph, so no process-group
@@ -68,7 +91,9 @@ using ComponentEvent = std::variant<
     DeactivationComplete,
     UnexpectedTermination,
     SupervisionFailure,
-    JobSkipped>;
+    JobSkipped,
+    GetActiveRunTarget,
+    SetRequestedRunTarget>;
 
 }  // namespace score::mw::lifecycle::internal
 

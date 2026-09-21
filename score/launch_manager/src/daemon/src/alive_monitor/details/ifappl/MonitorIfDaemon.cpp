@@ -15,8 +15,8 @@
 
 #include <cstring>
 
-#include "score/launch_manager/src/daemon/src/common/log.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/ifexm/ObservableEvent.hpp"
+#include "score/mw/launch_manager/common/log.hpp"
 
 namespace score::mw::lifecycle::internal::saf::ifappl
 {
@@ -54,7 +54,7 @@ void MonitorIfDaemon::updateData(const ifexm::ObservableEvent& f_observable_r) n
     }
 }
 
-void MonitorIfDaemon::checkForNewData(const timers::NanoSecondType f_syncTimestamp) noexcept(true)
+void MonitorIfDaemon::checkForNewData(const std::chrono::nanoseconds f_syncTimestamp) noexcept(true)
 {
     if ((isActivateRequest == true) && (status == EInternalState::kInactive))
     {
@@ -118,18 +118,15 @@ void MonitorIfDaemon::handleOverflow()
     status = EInternalState::kInactiveOverflow;
 }
 
-void MonitorIfDaemon::pushCheckpointToObservers(CheckpointBufferElement& f_elem_r)
+void MonitorIfDaemon::pushCheckpointToObservers(const CheckpointBufferElement& f_elem_r)
 {
     for (auto& observer : checkpointObservers)
     {
-        if (f_elem_r.checkpointId == observer->getId())
-        {
-            observer->pushData(f_elem_r.timestamp);
-        }
+        observer->pushData(f_elem_r.timestamp);
     }
 }
 
-bool MonitorIfDaemon::pushNewDataToCheckpointObservers(const timers::NanoSecondType f_syncTimestamp)
+bool MonitorIfDaemon::pushNewDataToCheckpointObservers(const std::chrono::nanoseconds f_syncTimestamp)
 {
     using IpcResult = CheckpointIpcServer::EIpcPeekResult;
     std::uint32_t amountOfReceivedCheckpoints{0U};
@@ -191,7 +188,7 @@ void MonitorIfDaemon::pushOverflowInfoToCheckpointObservers(void) const
     for (auto& observer : checkpointObservers)
     {
         observer->setDataLossEvent(true);
-        observer->pushData(static_cast<timers::NanoSecondType>(0));
+        observer->pushData(static_cast<std::chrono::nanoseconds>(0));
     }
 }
 

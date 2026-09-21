@@ -19,14 +19,9 @@
 
 #include "score/mw/launch_manager/process_group_manager/details/safe_process_map.hpp"
 #include "score/os/sys_wait.h"
+#include "score/os/utils/thread.h"
 
-namespace score
-{
-
-namespace mw::lifecycle
-{
-
-namespace internal
+namespace score::mw::lifecycle::internal
 {
 
 /// @brief Delay duration between successive iterations of the OsHandler's main loop when no processes are terminating.
@@ -51,6 +46,7 @@ class OsHandler final
     OsHandler(SafeProcessMap& map, score::os::SysWait& sys_wait = score::os::SysWait::instance())
         : safe_process_map_(map), sys_wait_(sys_wait)
     {
+        score::os::set_thread_name(os_handler_, "os_handler");
     }
 
     /// @brief Stops and and destroy the execution of the OsHandler's thread by setting the is_running_ flag to false,
@@ -95,10 +91,6 @@ class OsHandler final
     std::thread os_handler_{&score::mw::lifecycle::internal::OsHandler::run, this};
 };
 
-}  // namespace internal
-
-}  // namespace mw::lifecycle
-
-}  // namespace score
+}  // namespace score::mw::lifecycle::internal
 
 #endif  /// OS_HANDLER_HPP_INCLUDED

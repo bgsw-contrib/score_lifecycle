@@ -39,40 +39,6 @@ cc_library(
 )
 
 cc_library(
-    name = "ialive_monitor_thread",
-    hdrs = ["ialive_monitor_thread.hpp"],
-    include_prefix = "score/mw/launch_manager/process_group_manager",
-    strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager",
-    visibility = ["//score:__subpackages__"],
-)
-
-cc_library(
-    name = "mock_ialive_monitor_thread",
-    testonly = True,
-    hdrs = ["mock_alive_monitor_thread.hpp"],
-    include_prefix = "score/mw/launch_manager/process_group_manager",
-    strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager",
-    visibility = ["//score:__subpackages__"],
-    deps = [
-        ":ialive_monitor_thread",
-        "@googletest//:gtest",
-    ],
-)
-
-cc_library(
-    name = "alive_monitor_thread",
-    srcs = ["alive_monitor_thread.cpp"],
-    hdrs = ["alive_monitor_thread.hpp"],
-    include_prefix = "score/mw/launch_manager/process_group_manager",
-    strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager",
-    visibility = ["//score:__subpackages__"],
-    deps = [
-        ":ialive_monitor_thread",
-        "//score/launch_manager/src/daemon/src/alive_monitor",
-    ],
-)
-
-cc_library(
     name = "process_group_manager",
     srcs = ["process_group_manager.cpp"],
     hdrs = ["process_group_manager.hpp"],
@@ -80,24 +46,26 @@ cc_library(
     strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager",
     visibility = ["//score:__subpackages__"],
     deps = [
-        ":ialive_monitor_thread",
         ":iprocess",
+        ":irun_target_control",
+        "//score/launch_manager/src/daemon/src/alive_monitor:i_alive_monitor",
         "//score/launch_manager/src/daemon/src/common:identifier_hash",
         "//score/launch_manager/src/daemon/src/common/concurrency:mpmc_concurrent_queue",
         "//score/launch_manager/src/daemon/src/common/concurrency:thread_pool",
         "//score/launch_manager/src/daemon/src/configuration:config",
-        "//score/launch_manager/src/daemon/src/control:control_client_channel",
         "//score/launch_manager/src/daemon/src/osal:ipc_comms",
+        "//score/launch_manager/src/daemon/src/osal:wait_for_file",
+        "//score/launch_manager/src/daemon/src/process_group_manager/details:component_event",
         "//score/launch_manager/src/daemon/src/process_group_manager/details:graph",
-        "//score/launch_manager/src/daemon/src/process_group_manager/details:itransition_result_publisher",
         "//score/launch_manager/src/daemon/src/process_group_manager/details:os_handler",
         "//score/launch_manager/src/daemon/src/process_group_manager/details:process_info_node",
         "//score/launch_manager/src/daemon/src/process_group_manager/details:process_launcher",
         "//score/launch_manager/src/daemon/src/process_group_manager/details:process_monitor",
         "//score/launch_manager/src/daemon/src/process_group_manager/details:safe_process_map",
         "//score/launch_manager/src/daemon/src/recovery_client",
-        "//score/launch_manager/src/daemon/src/supervision_control_client:isupervision_control_notifier",
         "//score/launch_manager/src/daemon/src/watchdog:i_watchdog_if",
+        "//score/launch_manager/src/lm_control",
+        "@score_baselibs//score/concurrency/future",
         "@score_baselibs//score/language/futurecpp",
     ],
 )
@@ -108,4 +76,16 @@ cc_library(
     include_prefix = "score/mw/launch_manager/process_group_manager",
     strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager",
     visibility = ["//score:__subpackages__"],
+)
+
+cc_library(
+    name = "irun_target_control",
+    hdrs = ["irun_target_control.hpp"],
+    include_prefix = "score/mw/launch_manager/process_group_manager",
+    strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager",
+    visibility = ["//score/launch_manager/src/daemon/src:__subpackages__"],
+    deps = [
+        "//score/launch_manager/src/daemon/src/common:identifier_hash",
+        "@score_baselibs//score/result",
+    ],
 )
