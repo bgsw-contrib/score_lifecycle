@@ -100,7 +100,7 @@ class AliveWorkerFactoryErrorPathTest : public ::testing::Test
     std::unique_ptr<AliveWorkerFactory> factory_;
 };
 
-// Line 65: EmplaceAndAttach catch block
+// EmplaceAndAttach catch block: allocation failure while emplacing the observer
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIf_AllocationFailureReturnsFalse)
 {
     std::vector<ifappl::MonitorIfDaemon> interfaces;
@@ -116,7 +116,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIf_AllocationFailureReturnsFa
     EXPECT_TRUE(interfaces.empty());
 }
 
-// Lines 87-91: createObservableEvent catch block
+// createObservableEvent catch block: allocation failure while emplacing the event
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_AllocationFailureReturnsFalse)
 {
     std::vector<ifexm::ObservableEvent> events;
@@ -133,7 +133,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_AllocationFailureR
     EXPECT_TRUE(events.empty());
 }
 
-// Lines 138-143: createAliveIfIpc catch block
+// createAliveIfIpc catch block: allocation failure while emplacing the server
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AllocationFailureReturnsFalse)
 {
     std::vector<ifappl::CheckpointIpcServer> servers;
@@ -157,7 +157,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_WithOwnUid_Succeeds)
     EXPECT_EQ(servers.size(), 1U);
 }
 
-// Line 104: init() fails because shm_open hits the file descriptor limit
+// init() failure branch: shm_open fails because the file descriptor limit is reached
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_FdLimitFailsInit)
 {
     std::vector<ifappl::CheckpointIpcServer> servers;
@@ -176,15 +176,15 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_FdLimitFailsInit)
 }
 
 // --------------------------------------------------------------------------
-// ERROR PATH: IPC Server Initialization Failure (Line 104)
-// When f_ipcServer_r.init() fails, return false (line 104)
+// ERROR PATH: IPC server initialization failure
+// When the IPC server's init() reports a non-OK result, the factory returns false
 // --------------------------------------------------------------------------
 
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_PermissionDeniedExercisesIpcInitFailurePath)
 {
     RecordProperty(
         "Description",
-        "Exercise line 104 error path: IPC init() returns non-OK status. "
+        "Exercise the init-failure error path: IPC init() returns non-OK status. "
         "Uses UID 0 (root) which may fail permission setup, causing init or setAccessRights to fail.");
 
     std::vector<ifappl::CheckpointIpcServer> servers;
@@ -194,11 +194,11 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_PermissionDeniedExercis
     bool result = factory_->createAliveIfIpc(servers, componentId, rootUid);
 
     // Result may be false if permission check fails, which exercises error paths
-    // If false: lines 110-112 or 134-135 executed
+    // If false: the init or ACL failure branch executed
     if (!result)
     {
         ASSERT_LT(servers.size(), 2);  // At most one server was partially created
-        RecordProperty("ErrorPathExercised", "Lines 110-112 or 134-135 executed");
+        RecordProperty("ErrorPathExercised", "init or ACL failure branch executed");
     }
     else
     {
@@ -228,8 +228,8 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_ServerEntryIsKeptRegard
 }
 
 // --------------------------------------------------------------------------
-// ERROR PATH: initIpcServerWithUidBasedAccess Permission Failure (Lines 110-112)
-// When setAccessRights() fails, return false at line 112
+// ERROR PATH: initIpcServerWithUidBasedAccess permission failure
+// When setAccessRights() fails, the factory returns false
 // --------------------------------------------------------------------------
 
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AclSetupFailureReturnsFalse)
@@ -260,17 +260,17 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AclSetupFailureReturnsF
 }
 
 // --------------------------------------------------------------------------
-// ERROR PATH: createObservableEvent False Return (Line 93)
-// When registerObservableEvent() returns false due to duplicate key, line 93 executes
+// ERROR PATH: createObservableEvent returns false on duplicate registration
+// When registerObservableEvent() returns false due to a duplicate key, createObservableEvent returns false
 // --------------------------------------------------------------------------
 
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponentIdTriggersFalsePath)
 {
     RecordProperty(
         "Description",
-        "Exercise lines 73-94, specifically line 93 error path. "
+        "Exercise the duplicate-registration error path of createObservableEvent. "
         "registerObservableEvent() returns false when component_id already exists in map. "
-        "Second call with same ID triggers: emplace succeeds but registration fails, executing line 93 return false.");
+        "Second call with same ID triggers: emplace succeeds but registration fails, executing the final return false.");
 
     std::vector<ifexm::ObservableEvent> events;
     auto buffer = std::make_shared<SupervisionBufferType>();
@@ -279,23 +279,23 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponent
 
     IdentifierHash duplicateId{std::string_view{"duplicate_component"}};
 
-    // First call succeeds - exercises lines 75-84 happy path
+    // First call succeeds - happy path
     bool result1 = factory_->createObservableEvent(events, duplicateId, reader);
     ASSERT_TRUE(result1) << "First createObservableEvent should succeed";
     ASSERT_EQ(events.size(), 1);
 
     // Second call with SAME component_id fails registration
-    // This triggers: emplace_back succeeds (line 77) BUT
-    // registerObservableEvent returns false (line 81 condition is false)
-    // So we skip lines 82-83 and fall through to line 93 return false
+    // This triggers: emplace_back succeeds BUT
+    // registerObservableEvent returns false (the duplicate key is rejected)
+    // So the success branch is skipped and the final return false executes
     bool result2 = factory_->createObservableEvent(events, duplicateId, reader);
-    ASSERT_FALSE(result2) << "Second createObservableEvent with duplicate ID should fail (line 93)";
+    ASSERT_FALSE(result2) << "Second createObservableEvent with duplicate ID should fail (final return false)";
     ASSERT_EQ(events.size(), 2) << "Vector still has 2 entries even though second registration failed";
 
     RecordProperty(
         "CoverageNote",
-        "Lines 73-94 createObservableEvent fully exercised: "
-        "happy path (73-84) and error return path (93)");
+        "createObservableEvent fully exercised: "
+        "happy path and duplicate-registration error path");
 }
 
 // --------------------------------------------------------------------------
