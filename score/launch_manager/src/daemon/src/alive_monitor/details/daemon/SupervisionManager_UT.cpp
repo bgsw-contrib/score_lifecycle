@@ -57,9 +57,7 @@ class MockFactory : public factory::IAliveWorkerFactory
     MOCK_METHOD(
         bool,
         createAliveIfIpc,
-        (std::vector<ifappl::CheckpointIpcServer> & servers,
-         const IdentifierHash component_id,
-         const uid_t uid),
+        (std::vector<ifappl::CheckpointIpcServer> & servers, const IdentifierHash component_id, const uid_t uid),
         (override));
 
     MOCK_METHOD(
@@ -178,16 +176,41 @@ TEST_F(SupervisionManagerTest, ConstructWorker_WithAllSuccessfulCalls_ReturnsTru
 
     auto mockFactory = std::make_unique<MockFactory>();
 
-    EXPECT_CALL(*mockFactory, createObservableEvent).WillOnce(Return(true));
-    EXPECT_CALL(*mockFactory, createAliveIfIpc).WillOnce(Return(true));
-    EXPECT_CALL(*mockFactory, createAliveIf).WillOnce(Return(true));
-    EXPECT_CALL(*mockFactory, createAliveSupervision).WillOnce(Return(true));
+    EXPECT_CALL(*mockFactory, createObservableEvent)
+        .WillOnce(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                events.emplace_back(id);
+                return true;
+            }));
+    EXPECT_CALL(*mockFactory, createAliveIfIpc)
+        .WillOnce(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers, const IdentifierHash, const uid_t) {
+            servers.emplace_back();
+            return true;
+        }));
+    EXPECT_CALL(*mockFactory, createAliveIf)
+        .WillOnce(Invoke([](std::vector<ifappl::MonitorIfDaemon>& interfaces,
+                            ifappl::CheckpointIpcServer& ipc_server,
+                            ifexm::ObservableEvent&) {
+            interfaces.emplace_back(ipc_server, "test_interface");
+            return true;
+        }));
+    EXPECT_CALL(*mockFactory, createAliveSupervision)
+        .WillOnce(Invoke([](std::vector<supervision::Alive>& supervisions,
+                            ifappl::MonitorIfDaemon& interface,
+                            ifexm::ObservableEvent&,
+                            const std::shared_ptr<IRecoveryClient> recovery_client,
+                            const IdentifierHash id,
+                            const configuration::ComponentAliveSupervision cfg) {
+            supervisions.emplace_back(id, cfg, recovery_client, interface, 256);
+            return true;
+        }));
 
     SupervisionManager manager(std::move(mockFactory));
     manager.reserve(5);
 
     IdentifierHash componentId{"test_component"};
     configuration::ComponentAliveSupervision compConfig{};
+    compConfig.reporting_cycle_ms = 100;  // Alive requires a non-zero reference cycle
     auto recoveryClient = std::make_shared<MockRecoveryClient>();
     auto buffer = std::make_shared<SupervisionBufferType>();
     buffer->initialize();
@@ -200,8 +223,7 @@ TEST_F(SupervisionManagerTest, ConstructWorker_WithAllSuccessfulCalls_ReturnsTru
 
 TEST_F(SupervisionManagerTest, ConstructWorker_WithObservableEventFailure_ReturnsFalse)
 {
-    RecordProperty("Description",
-                   "Verify that constructWorker returns false when createObservableEvent fails.");
+    RecordProperty("Description", "Verify that constructWorker returns false when createObservableEvent fails.");
 
     auto mockFactory = std::make_unique<MockFactory>();
 
@@ -228,7 +250,12 @@ TEST_F(SupervisionManagerTest, ConstructWorker_WithAliveIfIpcFailure_ReturnsFals
 
     auto mockFactory = std::make_unique<MockFactory>();
 
-    EXPECT_CALL(*mockFactory, createObservableEvent).WillOnce(Return(true));
+    EXPECT_CALL(*mockFactory, createObservableEvent)
+        .WillOnce(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                events.emplace_back(id);
+                return true;
+            }));
     EXPECT_CALL(*mockFactory, createAliveIfIpc).WillOnce(Return(false));
 
     SupervisionManager manager(std::move(mockFactory));
@@ -252,8 +279,17 @@ TEST_F(SupervisionManagerTest, ConstructWorker_WithAliveIfFailure_ReturnsFalse)
 
     auto mockFactory = std::make_unique<MockFactory>();
 
-    EXPECT_CALL(*mockFactory, createObservableEvent).WillOnce(Return(true));
-    EXPECT_CALL(*mockFactory, createAliveIfIpc).WillOnce(Return(true));
+    EXPECT_CALL(*mockFactory, createObservableEvent)
+        .WillOnce(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                events.emplace_back(id);
+                return true;
+            }));
+    EXPECT_CALL(*mockFactory, createAliveIfIpc)
+        .WillOnce(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers, const IdentifierHash, const uid_t) {
+            servers.emplace_back();
+            return true;
+        }));
     EXPECT_CALL(*mockFactory, createAliveIf).WillOnce(Return(false));
 
     SupervisionManager manager(std::move(mockFactory));
@@ -273,14 +309,28 @@ TEST_F(SupervisionManagerTest, ConstructWorker_WithAliveIfFailure_ReturnsFalse)
 
 TEST_F(SupervisionManagerTest, ConstructWorker_WithAliveSupervisionFailure_ReturnsFalse)
 {
-    RecordProperty("Description", 
-                   "Verify that constructWorker returns false when createAliveSupervision fails.");
+    RecordProperty("Description", "Verify that constructWorker returns false when createAliveSupervision fails.");
 
     auto mockFactory = std::make_unique<MockFactory>();
 
-    EXPECT_CALL(*mockFactory, createObservableEvent).WillOnce(Return(true));
-    EXPECT_CALL(*mockFactory, createAliveIfIpc).WillOnce(Return(true));
-    EXPECT_CALL(*mockFactory, createAliveIf).WillOnce(Return(true));
+    EXPECT_CALL(*mockFactory, createObservableEvent)
+        .WillOnce(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                events.emplace_back(id);
+                return true;
+            }));
+    EXPECT_CALL(*mockFactory, createAliveIfIpc)
+        .WillOnce(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers, const IdentifierHash, const uid_t) {
+            servers.emplace_back();
+            return true;
+        }));
+    EXPECT_CALL(*mockFactory, createAliveIf)
+        .WillOnce(Invoke([](std::vector<ifappl::MonitorIfDaemon>& interfaces,
+                            ifappl::CheckpointIpcServer& ipc_server,
+                            ifexm::ObservableEvent&) {
+            interfaces.emplace_back(ipc_server, "test_interface");
+            return true;
+        }));
     EXPECT_CALL(*mockFactory, createAliveSupervision).WillOnce(Return(false));
 
     SupervisionManager manager(std::move(mockFactory));
@@ -299,22 +349,6 @@ TEST_F(SupervisionManagerTest, ConstructWorker_WithAliveSupervisionFailure_Retur
 }
 
 // --------------------------------------------------------------------------
-// checkInterfaceForNewData
-// --------------------------------------------------------------------------
-
-TEST_F(SupervisionManagerTest, CheckInterfaceForNewData_WithNoInterfaces_DoesNotCrash)
-{
-    RecordProperty("Description", "Verify that SupervisionManager can be created and reserved.");
-
-    auto mockFactory = std::make_unique<MockFactory>();
-    SupervisionManager manager(std::move(mockFactory));
-    manager.reserve(5);
-
-    // If we reach here without crash, test passed
-    ASSERT_TRUE(true);
-}
-
-// --------------------------------------------------------------------------
 // evaluateSupervisions
 // --------------------------------------------------------------------------
 
@@ -328,36 +362,6 @@ TEST_F(SupervisionManagerTest, EvaluateSupervisions_WithNoSupervisions_DoesNotCr
 
     // Verify manager is in valid state
     ASSERT_FALSE(manager.full());
-}
-
-// --------------------------------------------------------------------------
-// hasAnyRecoveryEnqueueFailed
-// --------------------------------------------------------------------------
-
-TEST_F(SupervisionManagerTest, HasAnyRecoveryEnqueueFailed_WithNoSupervisions_ReturnsFalse)
-{
-    RecordProperty("Description", "Verify that hasAnyRecoveryEnqueueFailed returns false with no supervisions.");
-
-    auto mockFactory = std::make_unique<MockFactory>();
-    SupervisionManager manager(std::move(mockFactory));
-    manager.reserve(5);
-
-    bool result = manager.hasAnyRecoveryEnqueueFailed();
-
-    ASSERT_FALSE(result);
-}
-
-TEST_F(SupervisionManagerTest, HasAnyRecoveryEnqueueFailed_WithSuccessfulSupervisions_ReturnsFalse)
-{
-    RecordProperty("Description", 
-                   "Verify that hasAnyRecoveryEnqueueFailed returns false when supervisions are OK.");
-
-    auto mockFactory = std::make_unique<MockFactory>();
-    SupervisionManager manager(std::move(mockFactory));
-    manager.reserve(5);
-
-    bool result = manager.hasAnyRecoveryEnqueueFailed();
-    ASSERT_FALSE(result);
 }
 
 // --------------------------------------------------------------------------
@@ -379,8 +383,7 @@ TEST_F(SupervisionManagerTest, PerformCyclicTriggers_WithNoSupervisions_DoesNotC
 
 TEST_F(SupervisionManagerTest, PerformCyclicTriggers_WithSupervisions_ExecutesEvaluation)
 {
-    RecordProperty("Description", 
-                   "Verify that performCyclicTriggers evaluates supervisions when present.");
+    RecordProperty("Description", "Verify that performCyclicTriggers evaluates supervisions when present.");
 
     auto mockFactory = std::make_unique<MockFactory>();
     SupervisionManager manager(std::move(mockFactory));
@@ -389,52 +392,36 @@ TEST_F(SupervisionManagerTest, PerformCyclicTriggers_WithSupervisions_ExecutesEv
     manager.performCyclicTriggers(std::chrono::nanoseconds{1000});
 
     // If we reach here without crash, test passed
-    ASSERT_TRUE(true);
-}
-
-TEST_F(SupervisionManagerTest, PerformCyclicTriggers_CallsCheckAndEvaluate)
-{
-    RecordProperty("Description", "Verify that performCyclicTriggers calls both check and evaluate methods.");
-
-    auto mockFactory = std::make_unique<MockFactory>();
-    SupervisionManager manager(std::move(mockFactory));
-    manager.reserve(5);
-
-    manager.performCyclicTriggers(std::chrono::nanoseconds{1000});
-
-    // Internal state should be updated
+    SUCCEED();
 }
 
 TEST_F(SupervisionManagerTest, ConstructWorker_MultipleWorkers_AllSucceed)
 {
-    RecordProperty("Description", 
-                   "Verify that multiple workers can be constructed sequentially.");
+    RecordProperty("Description", "Verify that multiple workers can be constructed sequentially.");
 
     auto mockFactory = std::make_unique<MockFactory>();
 
     // Use Invoke to populate vectors - WillRepeatedly so it can be called 3 times
     EXPECT_CALL(*mockFactory, createObservableEvent)
-        .WillRepeatedly(Invoke([](std::vector<ifexm::ObservableEvent>& events,
-                                   const IdentifierHash id,
-                                   ifexm::ObservableEventReader&) {
-            ifexm::ObservableEvent event(id);
-            events.push_back(std::move(event));
-            return true;
-        }));
+        .WillRepeatedly(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                ifexm::ObservableEvent event(id);
+                events.push_back(std::move(event));
+                return true;
+            }));
 
     EXPECT_CALL(*mockFactory, createAliveIfIpc)
-        .WillRepeatedly(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers,
-                                   const IdentifierHash,
-                                   const uid_t) {
-            ifappl::CheckpointIpcServer server;
-            servers.push_back(std::move(server));
-            return true;
-        }));
+        .WillRepeatedly(
+            Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers, const IdentifierHash, const uid_t) {
+                ifappl::CheckpointIpcServer server;
+                servers.push_back(std::move(server));
+                return true;
+            }));
 
     EXPECT_CALL(*mockFactory, createAliveIf)
         .WillRepeatedly(Invoke([](std::vector<ifappl::MonitorIfDaemon>& interfaces,
-                                   ifappl::CheckpointIpcServer& ipc_server,
-                                   ifexm::ObservableEvent&) {
+                                  ifappl::CheckpointIpcServer& ipc_server,
+                                  ifexm::ObservableEvent&) {
             ifappl::MonitorIfDaemon daemon(ipc_server, "test_interface");
             interfaces.push_back(std::move(daemon));
             return true;
@@ -442,11 +429,11 @@ TEST_F(SupervisionManagerTest, ConstructWorker_MultipleWorkers_AllSucceed)
 
     EXPECT_CALL(*mockFactory, createAliveSupervision)
         .WillRepeatedly(Invoke([](std::vector<supervision::Alive>& supervisions,
-                                   ifappl::MonitorIfDaemon& interface,
-                                   ifexm::ObservableEvent& event,
-                                   const std::shared_ptr<IRecoveryClient> recovery_client,
-                                   const IdentifierHash id,
-                                   const configuration::ComponentAliveSupervision cfg) {
+                                  ifappl::MonitorIfDaemon& interface,
+                                  ifexm::ObservableEvent& event,
+                                  const std::shared_ptr<IRecoveryClient> recovery_client,
+                                  const IdentifierHash id,
+                                  const configuration::ComponentAliveSupervision cfg) {
             supervision::Alive alive(id, cfg, recovery_client, interface, 256);
             supervisions.push_back(std::move(alive));
             return true;
@@ -454,15 +441,15 @@ TEST_F(SupervisionManagerTest, ConstructWorker_MultipleWorkers_AllSucceed)
 
     SupervisionManager manager(std::move(mockFactory));
     manager.reserve(10);
-        
+
     IdentifierHash componentId1{"component1"};
     IdentifierHash componentId2{"component2"};
     IdentifierHash componentId3{"component3"};
-    
+
     // Create valid config with non-zero reporting_cycle_ms
     configuration::ComponentAliveSupervision compConfig{};
     compConfig.reporting_cycle_ms = 100;  // Valid non-zero cycle time
-    
+
     auto recoveryClient = std::make_shared<MockRecoveryClient>();
     auto buffer = std::make_shared<SupervisionBufferType>();
     buffer->initialize();
@@ -482,34 +469,31 @@ TEST_F(SupervisionManagerTest, ConstructWorker_MultipleWorkers_AllSucceed)
 
 TEST_F(SupervisionManagerTest, PerformCyclicTriggers_LoopsExecuteForNonEmptySupervisions)
 {
-    RecordProperty("Description", 
-                   "Verify loop bodies execute in checkInterfaceForNewData and evaluateSupervisions.");
+    RecordProperty("Description", "Verify loop bodies execute in checkInterfaceForNewData and evaluateSupervisions.");
 
     auto mockFactory = std::make_unique<MockFactory>();
 
     // Use Invoke to actually populate vectors for loop execution
     EXPECT_CALL(*mockFactory, createObservableEvent)
-        .WillRepeatedly(Invoke([](std::vector<ifexm::ObservableEvent>& events,
-                                   const IdentifierHash id,
-                                   ifexm::ObservableEventReader&) {
-            ifexm::ObservableEvent event(id);
-            events.push_back(std::move(event));
-            return true;
-        }));
+        .WillRepeatedly(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                ifexm::ObservableEvent event(id);
+                events.push_back(std::move(event));
+                return true;
+            }));
 
     EXPECT_CALL(*mockFactory, createAliveIfIpc)
-        .WillRepeatedly(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers,
-                                   const IdentifierHash,
-                                   const uid_t) {
-            ifappl::CheckpointIpcServer server;
-            servers.push_back(std::move(server));
-            return true;
-        }));
+        .WillRepeatedly(
+            Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers, const IdentifierHash, const uid_t) {
+                ifappl::CheckpointIpcServer server;
+                servers.push_back(std::move(server));
+                return true;
+            }));
 
     EXPECT_CALL(*mockFactory, createAliveIf)
         .WillRepeatedly(Invoke([](std::vector<ifappl::MonitorIfDaemon>& interfaces,
-                                   ifappl::CheckpointIpcServer& ipc_server,
-                                   ifexm::ObservableEvent&) {
+                                  ifappl::CheckpointIpcServer& ipc_server,
+                                  ifexm::ObservableEvent&) {
             ifappl::MonitorIfDaemon daemon(ipc_server, "test_interface");
             interfaces.push_back(std::move(daemon));
             return true;
@@ -517,11 +501,11 @@ TEST_F(SupervisionManagerTest, PerformCyclicTriggers_LoopsExecuteForNonEmptySupe
 
     EXPECT_CALL(*mockFactory, createAliveSupervision)
         .WillRepeatedly(Invoke([](std::vector<supervision::Alive>& supervisions,
-                                   ifappl::MonitorIfDaemon& interface,
-                                   ifexm::ObservableEvent& event,
-                                   const std::shared_ptr<IRecoveryClient> recovery_client,
-                                   const IdentifierHash id,
-                                   const configuration::ComponentAliveSupervision cfg) {
+                                  ifappl::MonitorIfDaemon& interface,
+                                  ifexm::ObservableEvent& event,
+                                  const std::shared_ptr<IRecoveryClient> recovery_client,
+                                  const IdentifierHash id,
+                                  const configuration::ComponentAliveSupervision cfg) {
             supervision::Alive alive(id, cfg, recovery_client, interface, 256);
             supervisions.push_back(std::move(alive));
             return true;
@@ -551,30 +535,28 @@ TEST_F(SupervisionManagerTest, PerformCyclicTriggers_LoopsExecuteForNonEmptySupe
     manager.performCyclicTriggers(std::chrono::milliseconds{100});
 
     // If we reach here, loops executed without crash - success
-    ASSERT_TRUE(true);
+    SUCCEED();
 }
 
 TEST_F(SupervisionManagerTest, HasAnyRecoveryEnqueueFailed_WithFailedRecovery_ReturnsTrue)
 {
-    RecordProperty("Description",
-                   "Verify hasAnyRecoveryEnqueueFailed returns true once an expired supervision failed to enqueue recovery.");
+    RecordProperty(
+        "Description",
+        "Verify hasAnyRecoveryEnqueueFailed returns true once an expired supervision failed to enqueue recovery.");
 
     auto mockFactory = std::make_unique<MockFactory>();
     ifexm::ObservableEvent* eventPtr{nullptr};
 
     EXPECT_CALL(*mockFactory, createObservableEvent)
-        .WillOnce(Invoke([](std::vector<ifexm::ObservableEvent>& events,
-                            const IdentifierHash id,
-                            ifexm::ObservableEventReader&) {
-            ifexm::ObservableEvent event(id);
-            events.push_back(std::move(event));
-            return true;
-        }));
+        .WillOnce(Invoke(
+            [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+                ifexm::ObservableEvent event(id);
+                events.push_back(std::move(event));
+                return true;
+            }));
 
     EXPECT_CALL(*mockFactory, createAliveIfIpc)
-        .WillOnce(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers,
-                            const IdentifierHash,
-                            const uid_t) {
+        .WillOnce(Invoke([](std::vector<ifappl::CheckpointIpcServer>& servers, const IdentifierHash, const uid_t) {
             ifappl::CheckpointIpcServer server;
             servers.push_back(std::move(server));
             return true;
@@ -590,12 +572,13 @@ TEST_F(SupervisionManagerTest, HasAnyRecoveryEnqueueFailed_WithFailedRecovery_Re
         }));
 
     EXPECT_CALL(*mockFactory, createAliveSupervision)
-        .WillOnce(Invoke([&eventPtr](std::vector<supervision::Alive>& supervisions,
-                                     ifappl::MonitorIfDaemon& interface,
-                                     ifexm::ObservableEvent& event,
-                                     const std::shared_ptr<IRecoveryClient> recovery_client,
-                                     const IdentifierHash id,
-                                     const configuration::ComponentAliveSupervision cfg) {
+        .WillOnce(Invoke([&eventPtr](
+                             std::vector<supervision::Alive>& supervisions,
+                             ifappl::MonitorIfDaemon& interface,
+                             ifexm::ObservableEvent& event,
+                             const std::shared_ptr<IRecoveryClient> recovery_client,
+                             const IdentifierHash id,
+                             const configuration::ComponentAliveSupervision cfg) {
             auto& alive = supervisions.emplace_back(id, cfg, recovery_client, interface, 256);
             event.attachObserver(alive);
             eventPtr = &event;

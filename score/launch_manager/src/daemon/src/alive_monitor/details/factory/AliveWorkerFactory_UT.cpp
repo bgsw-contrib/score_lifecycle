@@ -13,6 +13,7 @@
 
 #include <gtest/gtest.h>
 
+#include <fcntl.h>
 #include <sys/resource.h>
 #include <unistd.h>
 
@@ -146,6 +147,16 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AllocationFailureReturn
     EXPECT_TRUE(servers.empty());
 }
 
+// Success path: the caller's own uid can always be granted access to its channel
+TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_WithOwnUid_Succeeds)
+{
+    std::vector<ifappl::CheckpointIpcServer> servers;
+    const IdentifierHash id{std::string_view{"own_uid_ipc_channel"}};
+
+    ASSERT_TRUE(factory_->createAliveIfIpc(servers, id, getuid()));
+    EXPECT_EQ(servers.size(), 1U);
+}
+
 // Line 104: init() fails because shm_open hits the file descriptor limit
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_FdLimitFailsInit)
 {
@@ -171,7 +182,8 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_FdLimitFailsInit)
 
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_PermissionDeniedExercisesIpcInitFailurePath)
 {
-    RecordProperty("Description", 
+    RecordProperty(
+        "Description",
         "Exercise line 104 error path: IPC init() returns non-OK status. "
         "Uses UID 0 (root) which may fail permission setup, causing init or setAccessRights to fail.");
 
@@ -196,27 +208,23 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_PermissionDeniedExercis
 }
 
 // --------------------------------------------------------------------------
-// ERROR PATH: createAliveIfIpc Exception Handler (Lines 138-143)
-// When exception occurs during emplace_back() or helper function calls,
-// catch block (lines 138-143) executes and returns false
+// createAliveIfIpc keeps the emplaced server entry whether or not init/ACL setup succeeds
 // --------------------------------------------------------------------------
 
-TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_ExceptionHandlerCatchBlockCoverage)
+TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_ServerEntryIsKeptRegardlessOfResult)
 {
-    RecordProperty("Description",
-        "Exercise lines 138-143 exception handler in createAliveIfIpc. "
-        "When helper function fails or exception occurs, catch block handles it.");
+    RecordProperty(
+        "Description",
+        "createAliveIfIpc emplaces the server before init(), so exactly one entry exists "
+        "even when ACL setup for the given uid fails.");
 
     std::vector<ifappl::CheckpointIpcServer> servers;
     IdentifierHash componentId{std::string_view{"error_test_ipc_exception"}};
     uid_t invalidUid = 65534;  // Non-root but potentially restrictive UID
 
-    // Call createAliveIfIpc - if it fails, exception path was exercised
     [[maybe_unused]] bool result = factory_->createAliveIfIpc(servers, componentId, invalidUid);
 
-    // Whether success or failure, we're testing the method's error handling capacity
-    ASSERT_GE(servers.size(), 0);  // May or may not have created server
-    RecordProperty("CoverageNote", "Lines 117-144 createAliveIfIpc method fully exercised");
+    ASSERT_EQ(servers.size(), 1U);
 }
 
 // --------------------------------------------------------------------------
@@ -224,25 +232,31 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_ExceptionHandlerCatchBl
 // When setAccessRights() fails, return false at line 112
 // --------------------------------------------------------------------------
 
-TEST_F(AliveWorkerFactoryErrorPathTest, InitIpcServer_SetAccessRightsFailureExecutesErrorPath)
+TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AclSetupFailureReturnsFalse)
 {
-    RecordProperty("Description",
-        "Exercise lines 110-112: setAccessRights() fails for restrictive UID. "
-        "This tests the error handling when ACL permissions cannot be set.");
+    RecordProperty(
+        "Description",
+        "init() succeeds and keeps its descriptor, but setAccessRights() cannot reopen the channel "
+        "because exactly one new descriptor is allowed, so createAliveIfIpc must return false.");
 
     std::vector<ifappl::CheckpointIpcServer> servers;
-    
-    // Multiple attempts with different UIDs to increase likelihood of permission failure
-    IdentifierHash componentId1{std::string_view{"error_perm_test_1"}};
-    IdentifierHash componentId2{std::string_view{"error_perm_test_2"}};
-    
-    // Try UID that might fail permissions
-    bool result1 = factory_->createAliveIfIpc(servers, componentId1, 65534);
-    bool result2 = factory_->createAliveIfIpc(servers, componentId2, 65535);
+    const IdentifierHash id{std::string_view{"acl_fail_ipc_channel"}};
 
-    // At least check that the methods executed
-    ASSERT_TRUE(result1 || result2 || servers.size() > 0);
-    RecordProperty("CoverageNote", "Lines 96-115 initIpcServerWithUidBasedAccess tested with permission scenarios");
+    const int lowestFreeFd = open("/dev/null", O_RDONLY);
+    ASSERT_GE(lowestFreeFd, 0);
+    close(lowestFreeFd);
+
+    rlimit original{};
+    ASSERT_EQ(getrlimit(RLIMIT_NOFILE, &original), 0);
+    rlimit restricted = original;
+    restricted.rlim_cur = static_cast<rlim_t>(lowestFreeFd) + 1U;
+    ASSERT_EQ(setrlimit(RLIMIT_NOFILE, &restricted), 0);
+
+    const bool result = factory_->createAliveIfIpc(servers, id, getuid());
+
+    ASSERT_EQ(setrlimit(RLIMIT_NOFILE, &original), 0);
+    EXPECT_FALSE(result);
+    EXPECT_EQ(servers.size(), 1U);
 }
 
 // --------------------------------------------------------------------------
@@ -252,7 +266,8 @@ TEST_F(AliveWorkerFactoryErrorPathTest, InitIpcServer_SetAccessRightsFailureExec
 
 TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponentIdTriggersFalsePath)
 {
-    RecordProperty("Description",
+    RecordProperty(
+        "Description",
         "Exercise lines 73-94, specifically line 93 error path. "
         "registerObservableEvent() returns false when component_id already exists in map. "
         "Second call with same ID triggers: emplace succeeds but registration fails, executing line 93 return false.");
@@ -270,31 +285,30 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponent
     ASSERT_EQ(events.size(), 1);
 
     // Second call with SAME component_id fails registration
-    // This triggers: emplace_back succeeds (line 77) BUT 
+    // This triggers: emplace_back succeeds (line 77) BUT
     // registerObservableEvent returns false (line 81 condition is false)
     // So we skip lines 82-83 and fall through to line 93 return false
     bool result2 = factory_->createObservableEvent(events, duplicateId, reader);
     ASSERT_FALSE(result2) << "Second createObservableEvent with duplicate ID should fail (line 93)";
     ASSERT_EQ(events.size(), 2) << "Vector still has 2 entries even though second registration failed";
 
-    RecordProperty("CoverageNote", "Lines 73-94 createObservableEvent fully exercised: "
+    RecordProperty(
+        "CoverageNote",
+        "Lines 73-94 createObservableEvent fully exercised: "
         "happy path (73-84) and error return path (93)");
 }
 
 // --------------------------------------------------------------------------
-// ERROR PATH: All Remaining Exception Handlers & Failure Paths
-// Target lines: 65-69, 87-91, 104, 138-143
+// createAliveIf and createAliveSupervision with caller-provided inputs (no IPC setup involved)
 // --------------------------------------------------------------------------
 
-TEST_F(AliveWorkerFactoryErrorPathTest, FullCoverageWithMultipleErrorScenarios)
+TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfAndSupervision_WithValidInputs_Succeed)
 {
-    RecordProperty("Description",
-        "Comprehensive error path coverage: "
-        "1. Duplicate events to trigger registerObservableEvent failure (line 93) "
-        "2. Multiple IPC attempts to stress permission/init paths (line 104) "
-        "3. Multiple AliveSupervision creates to exercise all factory methods");
+    RecordProperty(
+        "Description",
+        "createObservableEvent, createAliveIf and createAliveSupervision all succeed and append exactly one "
+        "object each when given a registered event and a default server entry.");
 
-    // Setup
     auto buffer = std::make_shared<SupervisionBufferType>();
     buffer->initialize();
     ifexm::ObservableEventReader reader(buffer);
@@ -312,47 +326,17 @@ TEST_F(AliveWorkerFactoryErrorPathTest, FullCoverageWithMultipleErrorScenarios)
     config.failed_cycles_tolerance = 0;
     config.reporting_cycle_ms = 100;
 
-    // Test 1: First successful event creation
-    IdentifierHash id1{std::string_view{"test_component_1"}};
-    bool eventOk1 = factory_->createObservableEvent(events, id1, reader);
-    ASSERT_TRUE(eventOk1);
+    const IdentifierHash id{std::string_view{"test_component_1"}};
+    ASSERT_TRUE(factory_->createObservableEvent(events, id, reader));
+    ASSERT_EQ(events.size(), 1U);
 
-    // Test 2: Duplicate event registration failure (exercises line 93 error path)
-    bool eventOk2 = factory_->createObservableEvent(events, id1, reader);
-    ASSERT_FALSE(eventOk2) << "Duplicate ID should fail registration";
+    servers.emplace_back();
 
-    // Test 3: Different ID succeeds
-    IdentifierHash id2{std::string_view{"test_component_2"}};
-    bool eventOk3 = factory_->createObservableEvent(events, id2, reader);
-    ASSERT_TRUE(eventOk3);
+    ASSERT_TRUE(factory_->createAliveIf(interfaces, servers[0], events[0]));
+    ASSERT_EQ(interfaces.size(), 1U);
 
-    // Test 4: Create IPC servers - some may fail on permission/init (line 104)
-    IdentifierHash compId1{std::string_view{"comp_ipc_1"}};
-    IdentifierHash compId2{std::string_view{"comp_ipc_2"}};
-    bool ipcOk1 = factory_->createAliveIfIpc(servers, compId1, 1000);
-    bool ipcOk2 = factory_->createAliveIfIpc(servers, compId2, 1001);
-
-    // At least one should succeed
-    ASSERT_GE(servers.size(), 1) << "At least one IPC server should be created";
-
-    // Test 5: If we got servers, create interfaces
-    if (servers.size() > 0 && events.size() > 0)
-    {
-        bool ifOk = factory_->createAliveIf(interfaces, servers[0], events[0]);
-        ASSERT_TRUE(ifOk);
-    }
-
-    // Test 6: Create supervisions with successful interfaces
-    if (interfaces.size() > 0 && events.size() > 0)
-    {
-        bool supOk = factory_->createAliveSupervision(
-            supervisions, interfaces[0], events[0], mockClient, id1, config);
-        ASSERT_TRUE(supOk);
-    }
-
-    RecordProperty("CoverageNote",
-        "Tested: duplicate events (line 93), IPC init (line 104), "
-        "all factory methods. Exception handlers remain for stress testing.");
+    ASSERT_TRUE(factory_->createAliveSupervision(supervisions, interfaces[0], events[0], mockClient, id, config));
+    ASSERT_EQ(supervisions.size(), 1U);
 }
 
 }  // namespace score::mw::lifecycle::internal::saf::factory

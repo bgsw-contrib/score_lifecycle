@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include <dlfcn.h>
+#include <unistd.h>
 #include <time.h>
 
 #include <atomic>
@@ -54,8 +55,11 @@ class MockOsClockInterface : public timers::OsClockInterface
   public:
     MOCK_METHOD(int, clockGetTime, (struct timespec * ts), (const, noexcept, override));
     MOCK_METHOD(int, clockGetRes, (struct timespec * res), (const, noexcept, override));
-    MOCK_METHOD(int, clockNanosleep, (int flags, const struct timespec* request, struct timespec* remain),
-                (const, noexcept, override));
+    MOCK_METHOD(
+        int,
+        clockNanosleep,
+        (int flags, const struct timespec* request, struct timespec* remain),
+        (const, noexcept, override));
 };
 
 class MockRecoveryClient : public IRecoveryClient
@@ -80,11 +84,10 @@ class CyclicExecutorTest : public ::testing::Test
         // Set up mock clock to return reasonable values
         struct timespec ts{10, 0};
         ON_CALL(mockClock_, clockGetTime).WillByDefault(DoAll(SetArgPointee<0>(ts), Return(0)));
-        
+
         // Create timespec for clock resolution
         timespec res_ts{0, 1000};
-        ON_CALL(mockClock_, clockGetRes).WillByDefault(
-            DoAll(SetArgPointee<0>(res_ts), Return(0)));
+        ON_CALL(mockClock_, clockGetRes).WillByDefault(DoAll(SetArgPointee<0>(res_ts), Return(0)));
 
         mockRecoveryClient_ = std::make_shared<MockRecoveryClient>();
     }
@@ -228,14 +231,14 @@ TEST_F(CyclicExecutorTest, ConstructSupervision_WithValidParameters_ReturnsHandl
     compConfig.failed_cycles_tolerance = 0;
     compConfig.reporting_cycle_ms = 100;
 
-    auto handle = executor.constructSupervision(componentId, 1000, compConfig);
+    auto handle = executor.constructSupervision(componentId, getuid(), compConfig);
 
-    // Handle can be null if factory fails, this test just verifies it doesn't crash
+    ASSERT_NE(handle, nullptr);
 }
 
 TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
 {
-    RecordProperty("Description", "Verify that multiple supervisions can be constructed.");
+    RecordProperty("Description", "Verify that multiple supervisions can be constructed for the current user.");
 
     CyclicExecutor executor(mockClock_, 5);
     configuration::AliveSupervisionConfig config{};
@@ -252,13 +255,37 @@ TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
     IdentifierHash componentId1{"component1"};
     IdentifierHash componentId2{"component2"};
 
-    auto handle1 = executor.constructSupervision(componentId1, 1000, compConfig);
-    auto handle2 = executor.constructSupervision(componentId2, 1001, compConfig);
+    // ACL setup only succeeds for the caller's own uid, so fixed uids make the result host-dependent.
+    const uid_t uid = getuid();
+    auto handle1 = executor.constructSupervision(componentId1, uid, compConfig);
+    auto handle2 = executor.constructSupervision(componentId2, uid, compConfig);
 
-    // Handles can be null if factory fails, this test just verifies it doesn't crash
+    ASSERT_NE(handle1, nullptr);
+    ASSERT_NE(handle2, nullptr);
 }
 
-TEST_F(CyclicExecutorTest, ConstructSupervision_ExceedingCapacity_DoesNotCrash)
+TEST_F(CyclicExecutorTest, ConstructSupervision_DuplicateId_ReturnsNullptr)
+{
+    RecordProperty("Description", "Verify constructSupervision returns nullptr when the id is already registered.");
+
+    CyclicExecutor executor(mockClock_, 5);
+    configuration::AliveSupervisionConfig config{};
+    config.evaluation_cycle_ms = 100;
+
+    ASSERT_EQ(executor.init(mockRecoveryClient_, config), daemon::EInitCode::kNoError);
+
+    configuration::ComponentAliveSupervision compConfig{};
+    compConfig.min_indications = 1;
+    compConfig.max_indications = 3;
+    compConfig.failed_cycles_tolerance = 0;
+    compConfig.reporting_cycle_ms = 100;
+
+    const IdentifierHash id{"component1"};
+    ASSERT_NE(executor.constructSupervision(id, getuid(), compConfig), nullptr);
+    ASSERT_EQ(executor.constructSupervision(id, getuid(), compConfig), nullptr);
+}
+
+TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_DoesNotCrash)
 {
     RecordProperty("Description", "Verify that constructSupervision respects capacity limits.");
 
