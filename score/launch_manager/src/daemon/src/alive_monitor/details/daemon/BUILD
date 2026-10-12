@@ -70,3 +70,33 @@ cc_library(
         "@score_baselibs//score/os/utils:thread",
     ],
 )
+
+lm_cc_test(
+    name = "AliveMonitorImpl_UT",
+    srcs = ["AliveMonitorImpl_UT.cpp"],
+    deps = [
+        ":health_monitor_impl",
+        "//score/launch_manager/src/daemon/src/configuration:config",
+        "@googletest//:gtest_main",
+    ],
+)
+
+lm_cc_test(
+    name = "CyclicExecutor_UT",
+    srcs = ["CyclicExecutor_UT.cpp"],
+    deps = [
+        ":cyclic_executor",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/timers:timers_os_clock",
+        "@googletest//:gtest_main",
+    ],
+)
+
+lm_cc_test(
+    name = "SupervisionManager_UT",
+    srcs = ["SupervisionManager_UT.cpp"],
+    deps = [
+        ":sw_cluster_handler",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:alive_worker_factory",
+        "@googletest//:gtest_main",
+    ],
+)
