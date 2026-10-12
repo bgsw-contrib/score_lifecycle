@@ -171,10 +171,11 @@ TEST_F(AliveMonitorImplTest, Init_WithZeroCycleTime_ReturnsTrue)
     config.evaluation_cycle_ms = 0;
 
     AliveMonitorImpl monitor(mockClient_, config, 5);
-    bool result = monitor.init();
+    const bool result = monitor.init();
 
     // Depending on clock accuracy, this might fail or succeed
     // We're testing it doesn't crash
+    ASSERT_TRUE(result);
 }
 
 TEST_F(AliveMonitorImplTest, Init_WithLargeCycleTime_ReturnsTrue)
@@ -244,9 +245,12 @@ TEST_F(AliveMonitorImplTest, StopMonitoring_StopsThread)
     // If we reach here without deadlock, the test passed
 }
 
-TEST_F(AliveMonitorImplTest, StartMonitoring_Then_StopMonitoring_Cycle)
+TEST_F(AliveMonitorImplTest, StartAndStopMonitoring_CanBeCalledMultipleTimes)
 {
-    RecordProperty("Description", "Verify that start/stop monitoring cycle works correctly.");
+    RecordProperty(
+        "Description",
+        "Verify that startMonitoring and stopMonitoring can be called "
+        "multiple times without deadlock or exceptions.");
 
     configuration::AliveSupervisionConfig config{};
     config.evaluation_cycle_ms = 50;
@@ -263,6 +267,8 @@ TEST_F(AliveMonitorImplTest, StartMonitoring_Then_StopMonitoring_Cycle)
     monitor.startMonitoring();
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     monitor.stopMonitoring();
+
+    SUCCEED();
 }
 
 // --------------------------------------------------------------------------
