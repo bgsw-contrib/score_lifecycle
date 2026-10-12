@@ -50,3 +50,13 @@ cc_library(
         "@platforms//os:linux": ["//externals/acl"],
     }),
 )
+
+lm_cc_test(
+    name = "AliveWorkerFactory_UT",
+    srcs = ["AliveWorkerFactory_UT.cpp"],
+    deps = [
+        ":alive_worker_factory",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/ifexm:observable_event",
+        "@googletest//:gtest_main",
+    ],
+)
