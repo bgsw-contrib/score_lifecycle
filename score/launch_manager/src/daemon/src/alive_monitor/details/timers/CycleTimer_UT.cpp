@@ -30,8 +30,11 @@ class MockOsClockInterface : public OsClockInterface
 {
   public:
     MOCK_METHOD(int, clockGetTime, (struct timespec * ts), (const, noexcept, override));
-    MOCK_METHOD(int, clockNanosleep, (int flags, const struct timespec* request, struct timespec* remain),
-                (const, noexcept, override));
+    MOCK_METHOD(
+        int,
+        clockNanosleep,
+        (int flags, const struct timespec* request, struct timespec* remain),
+        (const, noexcept, override));
 };
 
 class CycleTimerTest : public ::testing::Test
@@ -338,9 +341,9 @@ TEST_F(CycleTimerTest, Sleep_WithTerminationSignal_BreaksFromLoop)
 
     EXPECT_CALL(mockClock, clockGetTime).WillOnce(DoAll(SetArgPointee<0>(ts), Return(0)));
 
-    int result = timer.sleep(terminate, overDeadline);
+    const int result = timer.sleep(terminate, overDeadline);
 
-    // With termination flag set and EINTR behavior, sleep should return quickly
+    ASSERT_EQ(result, EINTR);
 }
 
 }  // namespace score::mw::lifecycle::internal::saf::timers

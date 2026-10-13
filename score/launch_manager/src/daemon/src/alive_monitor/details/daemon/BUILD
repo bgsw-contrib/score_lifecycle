@@ -11,6 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//tests/utils/bazel:unit_test.bzl", "lm_cc_test")
 
 cc_library(
     name = "sw_cluster_handler",
