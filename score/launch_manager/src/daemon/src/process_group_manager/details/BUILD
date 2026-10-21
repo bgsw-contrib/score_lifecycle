@@ -89,15 +89,28 @@ cc_library(
 )
 
 cc_library(
+    name = "completion_slot",
+    hdrs = ["completion_slot.hpp"],
+    include_prefix = "score/mw/launch_manager/process_group_manager/details",
+    strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager/details",
+    visibility = ["//score/launch_manager/src/daemon/src/process_group_manager:__subpackages__"],
+    deps = [
+        "@score_baselibs//score/concurrency:notification",
+        "@score_baselibs//score/language/futurecpp",
+    ],
+)
+
+cc_library(
     name = "component_event",
     hdrs = ["component_event.hpp"],
     include_prefix = "score/mw/launch_manager/process_group_manager/details",
     strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager/details",
     visibility = ["//score/launch_manager/src/daemon/src/process_group_manager:__pkg__"],
     deps = [
+        ":completion_slot",
         ":icomponent",
         "//score/launch_manager/src/daemon/src/common:identifier_hash",
-        "@score_baselibs//score/concurrency/future",
+        "@score_baselibs//score/result",
     ],
 )
 
@@ -125,6 +138,17 @@ cc_library(
         ":component_event",
         "//score/launch_manager/src/daemon/src/common:constants",
         "//score/launch_manager/src/daemon/src/common:identifier_hash",
+    ],
+)
+
+lm_cc_test(
+    name = "completion_slot_UT",
+    srcs = ["completion_slot_UT.cpp"],
+    deps = [
+        ":completion_slot",
+        "//score/launch_manager/src/daemon/src/common:identifier_hash",
+        "@googletest//:gtest_main",
+        "@score_baselibs//score/result",
     ],
 )
 
@@ -162,6 +186,7 @@ cc_library(
         ":icomponent",
         ":process_handling",
         ":safe_process_map",
+        ":termination_waiter",
         "//score/launch_manager/src/daemon/src/alive_monitor:ialive_supervision_handle",
         "//score/launch_manager/src/daemon/src/configuration:component_config",
         "//score/launch_manager/src/daemon/src/osal:ifile_waiter",
@@ -170,6 +195,27 @@ cc_library(
         "//score/launch_manager/src/daemon/src/process_group_manager:iprocess",
         "//score/launch_manager/src/daemon/src/process_group_manager:process_state",
         "@score_baselibs//score/language/futurecpp",
+    ],
+)
+
+cc_library(
+    name = "termination_waiter",
+    srcs = ["termination_waiter.cpp"],
+    hdrs = ["termination_waiter.hpp"],
+    include_prefix = "score/mw/launch_manager/process_group_manager/details",
+    strip_include_prefix = "/score/launch_manager/src/daemon/src/process_group_manager/details",
+    visibility = ["//score/launch_manager/src/daemon/src/process_group_manager:__pkg__"],
+    deps = [
+        "@score_baselibs//score/concurrency/future",
+    ],
+)
+
+lm_cc_test(
+    name = "termination_waiter_UT",
+    srcs = ["termination_waiter_UT.cpp"],
+    deps = [
+        ":termination_waiter",
+        "@googletest//:gtest_main",
     ],
 )
 
@@ -406,17 +452,17 @@ lm_cc_test(
         "-Wl,--wrap=setrlimit",
         "-Wl,--wrap=getpid",
         "-Wl,--wrap=fcntl",
-        "-Wl,--wrap=sem_init",
         "-Wl,--wrap=sem_destroy",
-        "-Wl,--wrap=sem_trywait",
-        "-Wl,--wrap=sem_post",
         "-Wl,--wrap=msync",
+        "-Wl,--wrap=close",
+        "-Wl,--wrap=fstat",
     ],
     linkstatic = True,
     deps = [
         ":process_launcher",
         "//tests/utils/mocks:mock_syscalls",
         "@googletest//:gtest_main",
+        "@score_baselibs//score/os/mocklib:semaphore_mock",
     ],
 )
 
