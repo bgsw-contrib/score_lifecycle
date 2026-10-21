@@ -60,11 +60,10 @@ class SyscallMock
     MOCK_METHOD(pid_t, getpid, (), ());
     MOCK_METHOD(int, fcntl, (int __fd, int __cmd, void* arg), ());
     MOCK_METHOD(int, setgroups, (size_t n, const gid_t* groups), ());
-    MOCK_METHOD(int, sem_init, (sem_t * __sem, int __pshared, unsigned int __value), ());
     MOCK_METHOD(int, sem_destroy, (sem_t * __sem), ());
-    MOCK_METHOD(int, sem_trywait, (sem_t * __sem), ());
-    MOCK_METHOD(int, sem_post, (sem_t * __sem), ());
     MOCK_METHOD(int, msync, (void* __addr, size_t __len, int __flags), ());
+    MOCK_METHOD(int, close, (int __fd), ());
+    MOCK_METHOD(int, fstat, (int __fd, struct stat* __buf), ());
 };
 
 std::unique_ptr<SyscallMock> g_syscall_mock = nullptr;
@@ -311,19 +310,6 @@ int __wrap_fcntl(int __fd, int __cmd, ...)
     return __real_fcntl(__fd, __cmd, arg);
 }
 
-// wrap for sem_init
-extern int __real_sem_init(sem_t* __sem, int __pshared, unsigned int __value);
-
-int __wrap_sem_init(sem_t* __sem, int __pshared, unsigned int __value)
-{
-    if (g_syscall_mock)
-    {
-        return g_syscall_mock->sem_init(__sem, __pshared, __value);
-    }
-
-    return __real_sem_init(__sem, __pshared, __value);
-}
-
 // wrap for sem_destroy
 extern int __real_sem_destroy(sem_t* __sem);
 
@@ -337,32 +323,6 @@ int __wrap_sem_destroy(sem_t* __sem)
     return __real_sem_destroy(__sem);
 }
 
-// wrap for sem_trywait
-extern int __real_sem_trywait(sem_t* __sem);
-
-int __wrap_sem_trywait(sem_t* __sem)
-{
-    if (g_syscall_mock)
-    {
-        return g_syscall_mock->sem_trywait(__sem);
-    }
-
-    return __real_sem_trywait(__sem);
-}
-
-// wrap for sem_post
-extern int __real_sem_post(sem_t* __sem);
-
-int __wrap_sem_post(sem_t* __sem)
-{
-    if (g_syscall_mock)
-    {
-        return g_syscall_mock->sem_post(__sem);
-    }
-
-    return __real_sem_post(__sem);
-}
-
 // wrap for msync
 extern int __real_msync(void* __addr, size_t __len, int __flags);
 
@@ -374,6 +334,28 @@ int __wrap_msync(void* __addr, size_t __len, int __flags)
     }
 
     return __real_msync(__addr, __len, __flags);
+}
+
+// wrap for close
+extern int __real_close(int __fd);
+int __wrap_close(int __fd)
+{
+    if (g_syscall_mock)
+    {
+        return g_syscall_mock->close(__fd);
+    }
+    return __real_close(__fd);
+}
+
+// wrap for fstat
+extern int __real_fstat(int __fd, struct stat* __buf);
+int __wrap_fstat(int __fd, struct stat* __buf)
+{
+    if (g_syscall_mock)
+    {
+        return g_syscall_mock->fstat(__fd, __buf);
+    }
+    return __real_fstat(__fd, __buf);
 }
 }
 

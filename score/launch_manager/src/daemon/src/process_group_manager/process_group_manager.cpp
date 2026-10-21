@@ -17,9 +17,8 @@
 #include <algorithm>
 #include <csignal>
 
-#include "score/concurrency/future/interruptible_future.h"
-#include "score/concurrency/future/interruptible_promise.h"
 #include "score/mw/launch_manager/common/log.hpp"
+#include "score/mw/launch_manager/process_group_manager/details/completion_slot.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/component_event.hpp"
 #include "score/mw/launch_manager/process_group_manager/details/process_monitor.hpp"
 #include "score/mw/launch_manager/process_group_manager/process_group_manager.hpp"
@@ -344,7 +343,7 @@ void ProcessGroupManager::handleRecoveryRequest(const IdentifierHash& process_id
         if (old_state != recovery_state_)
         {
             // Cancel current transition and start new one
-            (void)graph_->setPendingState(recovery_state_);
+            (void)graph_->setPendingState(recovery_state_, RunTargetActivationSource::kRecoveryAction);
             graph_->setRequestStartTime();
             graph_->cancel();
         }
@@ -362,7 +361,7 @@ void ProcessGroupManager::handleRecoveryRequest(const IdentifierHash& process_id
     else
     {
         // Start new state transition
-        (void)graph_->setPendingState(recovery_state_);
+        (void)graph_->setPendingState(recovery_state_, RunTargetActivationSource::kRecoveryAction);
         graph_->setRequestStartTime();
     }
 }
@@ -376,6 +375,7 @@ void ProcessGroupManager::processGroupHandler(Graph& pg)
 
     if (GraphState::kSuccess == graph_state || GraphState::kUndefinedState == graph_state)
     {
+        const RunTargetActivationSource last_source = pg.getPendingTransition().source;
         IdentifierHash last_state = pg.setPendingState(IdentifierHash(""));
 
         if ((last_state != IdentifierHash("")) &&
@@ -384,7 +384,7 @@ void ProcessGroupManager::processGroupHandler(Graph& pg)
             LM_LOG_DEBUG() << "Start transition to" << last_state;
 
             // Already rejected via isValidRunTarget() in processStateTransition() (#541) if invalid.
-            const bool started = pg.startTransition(last_state);
+            const bool started = pg.startTransition(last_state, last_source);
             SCORE_LANGUAGE_FUTURECPP_ASSERT_MESSAGE(
                 started, "pending Run Target was not rejected by isValidRunTarget()");
         }
@@ -405,7 +405,8 @@ void ProcessGroupManager::processGroupHandler(Graph& pg)
             // nobody requested this transition, so there is nowhere to communicate an error
             // if we failed and there is no external request, we will try again next time
             pg.setRequestStartTime();
-            const bool started = pg.startTransition(IdentifierHash{Graph::recovery_state_name});
+            const bool started = pg.startTransition(
+                IdentifierHash{Graph::recovery_state_name}, RunTargetActivationSource::kRecoveryAction);
             SCORE_LANGUAGE_FUTURECPP_ASSERT_MESSAGE(started, "fallback Run Target node missing");
         }
     }
@@ -437,24 +438,23 @@ void ProcessGroupManager::handleGetActiveRunTarget(GetActiveRunTarget* event) co
             break;
     }
 
-    const auto set_result = event->promise.SetValue(result);
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(set_result.has_value());
+    if (event->completion != nullptr)
+    {
+        event->completion->complete(result);
+    }
 }
 
 Result<IdentifierHash> ProcessGroupManager::getActiveRunTarget() const noexcept
 {
-    auto promise = concurrency::InterruptiblePromise<Result<IdentifierHash>>{};
+    CompletionSlot<Result<IdentifierHash>> slot;
 
-    auto future_result = promise.GetInterruptibleFuture();
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(future_result.has_value());
-    auto future = std::move(future_result).value();
+    const bool push_result = event_queue_->push(GetActiveRunTarget{completion : &slot});
+    if (!push_result)
+    {
+        return score::MakeUnexpected(ExecErrc::kFailed);
+    }
 
-    const bool push_result = event_queue_->push(GetActiveRunTarget{std::move(promise)});
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(push_result);
-
-    const auto get_result = future.Get(cpp::stop_token{});
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(get_result.has_value());
-    return get_result.value();
+    return slot.wait();
 }
 
 void ProcessGroupManager::handleSetRequestedRunTarget(SetRequestedRunTarget* event) noexcept
@@ -493,24 +493,23 @@ void ProcessGroupManager::handleSetRequestedRunTarget(SetRequestedRunTarget* eve
         graph_->setRequestStartTime();
     }
 
-    const auto set_result = event->promise.SetValue(response);
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(set_result.has_value());
+    if (event->completion != nullptr)
+    {
+        event->completion->complete(response);
+    }
 }
 
 Result<void> ProcessGroupManager::setRequestedRunTarget(IdentifierHash run_target) noexcept
 {
-    auto promise = concurrency::InterruptiblePromise<Result<void>>{};
+    CompletionSlot<Result<void>> slot;
 
-    auto future_result = promise.GetInterruptibleFuture();
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(future_result.has_value());
-    auto future = std::move(future_result).value();
+    const bool push_result = event_queue_->push(SetRequestedRunTarget{run_target, completion : &slot});
+    if (!push_result)
+    {
+        return score::MakeUnexpected(ExecErrc::kFailed);
+    }
 
-    const bool push_result = event_queue_->push(SetRequestedRunTarget{run_target, std::move(promise)});
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(push_result);
-
-    const auto get_result = future.Get(cpp::stop_token{});
-    SCORE_LANGUAGE_FUTURECPP_ASSERT(get_result.has_value());
-    return get_result.value();
+    return slot.wait();
 }
 
 void ProcessGroupManager::registerActiveRunTargetCallback(ActivationCallbackT callback) noexcept
