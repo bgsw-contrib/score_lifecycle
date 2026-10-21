@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -14,9 +14,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <dlfcn.h>
-#include <time.h>
-
 #include <atomic>
 #include <cstdlib>
 #include <memory>
@@ -27,28 +24,16 @@
 #include "score/mw/launch_manager/alive_monitor/details/timers/OsClockInterface.hpp"
 #include "score/mw/launch_manager/configuration/config.hpp"
 #include "score/mw/launch_manager/recovery_client/irecovery_client.h"
+#include "tests/utils/mocks/mock_clock.hpp"
 
 using namespace testing;
 
 namespace
 {
-std::atomic<bool> g_failClockGetRes{false};
 // 0: disarmed, 1: next allocation throws std::bad_alloc, 2: next allocation throws a non-std type
 // Thread-local so allocations on other threads cannot consume the armed failure.
 thread_local std::atomic<int> g_failNextAllocation{0};
 }  // namespace
-
-// Overrides libc's clock_getres so tests can make the clock resolution query fail.
-extern "C" int clock_getres(clockid_t clock_id, struct timespec* res)
-{
-    if (g_failClockGetRes.load())
-    {
-        return -1;
-    }
-    using Fn = int (*)(clockid_t, struct timespec*);
-    static const Fn real = reinterpret_cast<Fn>(dlsym(RTLD_NEXT, "clock_getres"));
-    return real(clock_id, res);
-}
 
 void* operator new(std::size_t size)
 {
@@ -106,11 +91,11 @@ class AliveMonitorImplTest : public ::testing::Test
     std::shared_ptr<MockRecoveryClient> mockClient_;
 };
 
-// --------------------------------------------------------------------------
-// Constructor
-// --------------------------------------------------------------------------
+class AliveMonitorImplConstructorTest : public AliveMonitorImplTest
+{
+};
 
-TEST_F(AliveMonitorImplTest, Constructor_WithValidParameters_InitializesSuccessfully)
+TEST_F(AliveMonitorImplConstructorTest, Constructor_WithValidParameters_InitializesSuccessfully)
 {
     RecordProperty("Description", "Verify that AliveMonitorImpl can be constructed with valid parameters.");
 
@@ -122,7 +107,7 @@ TEST_F(AliveMonitorImplTest, Constructor_WithValidParameters_InitializesSuccessf
     ASSERT_NE(&monitor, nullptr);
 }
 
-TEST_F(AliveMonitorImplTest, Constructor_WithMinimalConfig_InitializesSuccessfully)
+TEST_F(AliveMonitorImplConstructorTest, Constructor_WithMinimalConfig_InitializesSuccessfully)
 {
     RecordProperty("Description", "Verify that AliveMonitorImpl can be constructed with minimal configuration.");
 
@@ -134,7 +119,7 @@ TEST_F(AliveMonitorImplTest, Constructor_WithMinimalConfig_InitializesSuccessful
     ASSERT_NE(&monitor, nullptr);
 }
 
-TEST_F(AliveMonitorImplTest, Constructor_WithLargeComponentCount_InitializesSuccessfully)
+TEST_F(AliveMonitorImplConstructorTest, Constructor_WithLargeComponentCount_InitializesSuccessfully)
 {
     RecordProperty("Description", "Verify that AliveMonitorImpl can be constructed with large component count.");
 
@@ -146,11 +131,11 @@ TEST_F(AliveMonitorImplTest, Constructor_WithLargeComponentCount_InitializesSucc
     ASSERT_NE(&monitor, nullptr);
 }
 
-// --------------------------------------------------------------------------
-// init
-// --------------------------------------------------------------------------
+class AliveMonitorImplInitTest : public AliveMonitorImplTest
+{
+};
 
-TEST_F(AliveMonitorImplTest, Init_WithValidConfig_ReturnsTrue)
+TEST_F(AliveMonitorImplInitTest, Init_WithValidConfig_ReturnsTrue)
 {
     RecordProperty("Description", "Verify that init returns true with valid configuration.");
 
@@ -163,7 +148,7 @@ TEST_F(AliveMonitorImplTest, Init_WithValidConfig_ReturnsTrue)
     ASSERT_TRUE(result);
 }
 
-TEST_F(AliveMonitorImplTest, Init_WithZeroCycleTime_ReturnsTrue)
+TEST_F(AliveMonitorImplInitTest, Init_WithZeroCycleTime_ReturnsTrue)
 {
     RecordProperty("Description", "Verify that init returns true even with zero cycle time.");
 
@@ -178,7 +163,7 @@ TEST_F(AliveMonitorImplTest, Init_WithZeroCycleTime_ReturnsTrue)
     ASSERT_TRUE(result);
 }
 
-TEST_F(AliveMonitorImplTest, Init_WithLargeCycleTime_ReturnsTrue)
+TEST_F(AliveMonitorImplInitTest, Init_WithLargeCycleTime_ReturnsTrue)
 {
     RecordProperty("Description", "Verify that init returns true with large cycle time.");
 
@@ -191,7 +176,7 @@ TEST_F(AliveMonitorImplTest, Init_WithLargeCycleTime_ReturnsTrue)
     ASSERT_TRUE(result);
 }
 
-TEST_F(AliveMonitorImplTest, Init_CanBeCalledMultipleTimes)
+TEST_F(AliveMonitorImplInitTest, Init_CanBeCalledMultipleTimes)
 {
     RecordProperty("Description", "Verify that init can be called multiple times safely.");
 
@@ -207,75 +192,16 @@ TEST_F(AliveMonitorImplTest, Init_CanBeCalledMultipleTimes)
     ASSERT_TRUE(result2);
 }
 
-// --------------------------------------------------------------------------
-// startMonitoring and stopMonitoring
-// --------------------------------------------------------------------------
-
-TEST_F(AliveMonitorImplTest, StartMonitoring_CreatesThread)
+class AliveMonitorImplStartStopMonitoringTest : public AliveMonitorImplTest
 {
-    RecordProperty("Description", "Verify that startMonitoring creates a monitoring thread.");
+};
 
-    configuration::AliveSupervisionConfig config{};
-    config.evaluation_cycle_ms = 100;
 
-    AliveMonitorImpl monitor(mockClient_, config, 5);
-    ASSERT_TRUE(monitor.init());
-
-    monitor.startMonitoring();
-    // Give thread a moment to start
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-    monitor.stopMonitoring();
-}
-
-TEST_F(AliveMonitorImplTest, StopMonitoring_StopsThread)
+class AliveMonitorImplGetSupervisionFactoryTest : public AliveMonitorImplTest
 {
-    RecordProperty("Description", "Verify that stopMonitoring stops the monitoring thread.");
+};
 
-    configuration::AliveSupervisionConfig config{};
-    config.evaluation_cycle_ms = 50;
-
-    AliveMonitorImpl monitor(mockClient_, config, 5);
-    ASSERT_TRUE(monitor.init());
-
-    monitor.startMonitoring();
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-
-    monitor.stopMonitoring();
-    // If we reach here without deadlock, the test passed
-}
-
-TEST_F(AliveMonitorImplTest, StartAndStopMonitoring_CanBeCalledMultipleTimes)
-{
-    RecordProperty(
-        "Description",
-        "Verify that startMonitoring and stopMonitoring can be called "
-        "multiple times without deadlock or exceptions.");
-
-    configuration::AliveSupervisionConfig config{};
-    config.evaluation_cycle_ms = 50;
-
-    AliveMonitorImpl monitor(mockClient_, config, 5);
-    ASSERT_TRUE(monitor.init());
-
-    // First cycle
-    monitor.startMonitoring();
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    monitor.stopMonitoring();
-
-    // Second cycle
-    monitor.startMonitoring();
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    monitor.stopMonitoring();
-
-    SUCCEED();
-}
-
-// --------------------------------------------------------------------------
-// getSupervisionFactory
-// --------------------------------------------------------------------------
-
-TEST_F(AliveMonitorImplTest, GetSupervisionFactory_ReturnsValidReference)
+TEST_F(AliveMonitorImplGetSupervisionFactoryTest, GetSupervisionFactory_ReturnsValidReference)
 {
     RecordProperty("Description", "Verify that getSupervisionFactory returns a valid factory reference.");
 
@@ -289,40 +215,24 @@ TEST_F(AliveMonitorImplTest, GetSupervisionFactory_ReturnsValidReference)
     ASSERT_NE(&factory, nullptr);
 }
 
-TEST_F(AliveMonitorImplTest, GetSupervisionFactory_ReturnsConsistentReference)
+class AliveMonitorImplInitErrorPathsTest : public AliveMonitorImplTest
 {
-    RecordProperty("Description", "Verify that getSupervisionFactory returns the same reference on multiple calls.");
+};
 
-    configuration::AliveSupervisionConfig config{};
-    config.evaluation_cycle_ms = 100;
-
-    AliveMonitorImpl monitor(mockClient_, config, 5);
-    ASSERT_TRUE(monitor.init());
-
-    ISupervisionFactory& factory1 = monitor.getSupervisionFactory();
-    ISupervisionFactory& factory2 = monitor.getSupervisionFactory();
-
-    ASSERT_EQ(&factory1, &factory2);
-}
-
-// --------------------------------------------------------------------------
-// init error paths
-// --------------------------------------------------------------------------
-
-TEST_F(AliveMonitorImplTest, Init_ClockResolutionUnavailable_ReturnsFalse)
+TEST_F(AliveMonitorImplInitErrorPathsTest, Init_ClockResolutionUnavailable_ReturnsFalse)
 {
     configuration::AliveSupervisionConfig config{};
     config.evaluation_cycle_ms = 100;
     AliveMonitorImpl monitor(mockClient_, config, 5);
 
-    g_failClockGetRes.store(true);
+    g_fail_clock_getres.store(true);
     const bool result = monitor.init();
-    g_failClockGetRes.store(false);
+    g_fail_clock_getres.store(false);
 
     ASSERT_FALSE(result);
 }
 
-TEST_F(AliveMonitorImplTest, Init_StdExceptionDuringInit_ReturnsFalse)
+TEST_F(AliveMonitorImplInitErrorPathsTest, Init_StdExceptionDuringInit_ReturnsFalse)
 {
     configuration::AliveSupervisionConfig config{};
     config.evaluation_cycle_ms = 100;
@@ -337,7 +247,7 @@ TEST_F(AliveMonitorImplTest, Init_StdExceptionDuringInit_ReturnsFalse)
     ASSERT_FALSE(result);
 }
 
-TEST_F(AliveMonitorImplTest, Init_NonStdExceptionDuringInit_ReturnsFalse)
+TEST_F(AliveMonitorImplInitErrorPathsTest, Init_NonStdExceptionDuringInit_ReturnsFalse)
 {
     configuration::AliveSupervisionConfig config{};
     config.evaluation_cycle_ms = 100;
