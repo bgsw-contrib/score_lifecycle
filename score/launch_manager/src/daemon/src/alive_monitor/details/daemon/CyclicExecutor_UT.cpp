@@ -27,7 +27,7 @@
 #include "score/mw/launch_manager/alive_monitor/details/timers/OsClockInterface.hpp"
 #include "score/mw/launch_manager/configuration/config.hpp"
 #include "score/mw/launch_manager/recovery_client/irecovery_client.h"
-#include "tests/utils/mocks/mock_clock.hpp"
+#include "tests/utils/mocks/mock_syscalls.hpp"
 
 using namespace testing;
 
@@ -100,7 +100,8 @@ TEST_F(CyclicExecutorConstructorTest, Constructor_WithZeroComponents_Initializes
 
 TEST_F(CyclicExecutorConstructorTest, Constructor_WithMaxComponentCount_ThrowsLengthError)
 {
-    RecordProperty("Description", "Verify that the constructor throws when the component count exceeds vector capacity.");
+    RecordProperty(
+        "Description", "Verify that the constructor throws when the component count exceeds vector capacity.");
 
     EXPECT_THROW(CyclicExecutor(mockClock_, std::numeric_limits<std::size_t>::max()), std::length_error);
 }
@@ -119,7 +120,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithValidConfig_ReturnsNoError)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 TEST_F(CyclicExecutorInitTest, Init_WithSmallCycleTime_ReturnsNoError)
@@ -132,7 +133,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithSmallCycleTime_ReturnsNoError)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 TEST_F(CyclicExecutorInitTest, Init_WithLargeCycleTime_ReturnsNoError)
@@ -145,7 +146,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithLargeCycleTime_ReturnsNoError)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 TEST_F(CyclicExecutorInitTest, Init_WithValidCycleTimer_SetsInitialization)
@@ -162,7 +163,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithValidCycleTimer_SetsInitialization)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 class CyclicExecutorStartTest : public CyclicExecutorTest
@@ -185,11 +186,14 @@ TEST_F(CyclicExecutorStartTest, StartCyclicExec_WithImmediateTermination_Returns
     std::atomic_bool terminate{true};
     bool result = executor.startCyclicExec(terminate);
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 class CyclicExecutorConstructSupervisionTest : public CyclicExecutorTest
 {
+  protected:
+    // ACL setup only succeeds for the caller's own uid, so fixed uids make the result host-dependent.
+    const uid_t uid_{getuid()};
 };
 
 TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_WithValidParameters_ReturnsHandle)
@@ -209,9 +213,9 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_WithValidPar
     compConfig.failed_cycles_tolerance = 0;
     compConfig.reporting_cycle_ms = 100;
 
-    auto handle = executor.constructSupervision(componentId, getuid(), compConfig);
+    auto handle = executor.constructSupervision(componentId, uid_, compConfig);
 
-    ASSERT_NE(handle, nullptr);
+    EXPECT_NE(handle, nullptr);
 }
 
 TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
@@ -233,13 +237,11 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupe
     IdentifierHash componentId1{"component1"};
     IdentifierHash componentId2{"component2"};
 
-    // ACL setup only succeeds for the caller's own uid, so fixed uids make the result host-dependent.
-    const uid_t uid = getuid();
-    auto handle1 = executor.constructSupervision(componentId1, uid, compConfig);
-    auto handle2 = executor.constructSupervision(componentId2, uid, compConfig);
+    auto handle1 = executor.constructSupervision(componentId1, uid_, compConfig);
+    auto handle2 = executor.constructSupervision(componentId2, uid_, compConfig);
 
-    ASSERT_NE(handle1, nullptr);
-    ASSERT_NE(handle2, nullptr);
+    EXPECT_NE(handle1, nullptr);
+    EXPECT_NE(handle2, nullptr);
 }
 
 TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_DuplicateId_ReturnsNullptr)
@@ -259,15 +261,16 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_DuplicateId_
     compConfig.reporting_cycle_ms = 100;
 
     const IdentifierHash id{"component1"};
-    ASSERT_NE(executor.constructSupervision(id, getuid(), compConfig), nullptr);
-    ASSERT_EQ(executor.constructSupervision(id, getuid(), compConfig), nullptr);
+    ASSERT_NE(executor.constructSupervision(id, uid_, compConfig), nullptr);
+    EXPECT_EQ(executor.constructSupervision(id, uid_, compConfig), nullptr);
 }
 
-TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupervisions_DoesNotCrash)
+TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_ExceedingCapacity_Asserts)
 {
-    RecordProperty("Description", "Verify that constructSupervision respects capacity limits.");
+    RecordProperty(
+        "Description", "Verify that constructing more supervisions than reserved triggers the debug assertion.");
 
-    CyclicExecutor executor(mockClock_, 5);  // 5 components allowed
+    CyclicExecutor executor(mockClock_, 2);  // 2 components allowed
     configuration::AliveSupervisionConfig config{};
     config.evaluation_cycle_ms = 100;
 
@@ -283,11 +286,15 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupe
     IdentifierHash componentId2{"component2"};
     IdentifierHash componentId3{"component3"};
 
-    auto handle1 = executor.constructSupervision(componentId1, 1000, compConfig);
-    auto handle2 = executor.constructSupervision(componentId2, 1001, compConfig);
-    auto handle3 = executor.constructSupervision(componentId3, 1002, compConfig);
+    std::unique_ptr<IAliveSupervisionHandle> handle1;
+    std::unique_ptr<IAliveSupervisionHandle> handle2;
+    EXPECT_NO_THROW(handle1 = executor.constructSupervision(componentId1, uid_, compConfig));
+    EXPECT_NO_THROW(handle2 = executor.constructSupervision(componentId2, uid_, compConfig));
+    // The two constructions above fill both reserved slots, so the next one must trip the assertion.
 
-    // If we reach here without crash, test passed
+    EXPECT_DEATH(
+        executor.constructSupervision(componentId3, uid_, compConfig),
+        "More alive supervisions than expected were constructed");
 }
 
 class CyclicExecutorLoopTest : public CyclicExecutorTest
@@ -310,7 +317,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_InitialTimestampFails_ReturnsFals
 
     EXPECT_CALL(mockClock_, clockGetTime).WillRepeatedly(Return(-1));
 
-    ASSERT_FALSE(executor.startCyclicExec(terminate_));
+    EXPECT_FALSE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepInterrupted_BreaksLoop)
@@ -323,7 +330,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepInterrupted_BreaksLoop)
         return EINTR;
     }));
 
-    ASSERT_TRUE(executor.startCyclicExec(terminate_));
+    EXPECT_TRUE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepFails_ContinuesUntilTerminated)
@@ -336,7 +343,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepFails_ContinuesUntilTerminat
         return EINVAL;
     }));
 
-    ASSERT_TRUE(executor.startCyclicExec(terminate_));
+    EXPECT_TRUE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_DeadlineAlreadyOver_ContinuesUntilTerminated)
@@ -345,15 +352,19 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_DeadlineAlreadyOver_ContinuesUnti
     ASSERT_EQ(executor.init(mockRecoveryClient_, config_), daemon::EInitCode::kNoError);
 
     // First call (start) returns 10s; the call inside sleep() returns a time past the deadline.
-    int calls = 0;
-    EXPECT_CALL(mockClock_, clockGetTime).WillRepeatedly(Invoke([&](struct timespec* ts) {
-        ts->tv_sec = (calls++ == 0) ? 10 : 100;
-        ts->tv_nsec = 0;
-        terminate_.store(calls > 1);
-        return 0;
-    }));
+    // First call (start) returns 10s; the call inside sleep() returns a time past the deadline.
+    const struct timespec start{10, 0};
+    const struct timespec pastDeadline{100, 0};
+    EXPECT_CALL(mockClock_, clockGetTime)
+        .WillOnce(DoAll(SetArgPointee<0>(start), Return(0)))
+        .WillRepeatedly(DoAll(
+            SetArgPointee<0>(pastDeadline),
+            InvokeWithoutArgs([this] {
+                terminate_.store(true);
+            }),
+            Return(0)));
 
-    ASSERT_TRUE(executor.startCyclicExec(terminate_));
+    EXPECT_TRUE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_MonotonicClockUnavailable_UsesMaxSyncTimestamp)
@@ -362,23 +373,22 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_MonotonicClockUnavailable_UsesMax
     ASSERT_EQ(executor.init(mockRecoveryClient_, config_), daemon::EInitCode::kNoError);
 
     // The real clock failure only has to last until performCyclicTriggers() has read it.
-    int calls = 0;
-    EXPECT_CALL(mockClock_, clockGetTime).WillRepeatedly(Invoke([&](struct timespec* ts) {
-        ts->tv_sec = 10;
-        ts->tv_nsec = 0;
-        if (calls++ > 0)
-        {
-            g_fail_monotonic_clock_gettime.store(false);
-            terminate_.store(true);
-        }
-        return 0;
-    }));
+    const struct timespec now{10, 0};
+    EXPECT_CALL(mockClock_, clockGetTime)
+        .WillOnce(DoAll(SetArgPointee<0>(now), Return(0)))
+        .WillRepeatedly(DoAll(
+            SetArgPointee<0>(now),
+            InvokeWithoutArgs([this] {
+                g_fail_monotonic_clock_gettime.store(false);
+                terminate_.store(true);
+            }),
+            Return(0)));
 
     g_fail_monotonic_clock_gettime.store(true);
     const bool result = executor.startCyclicExec(terminate_);
     g_fail_monotonic_clock_gettime.store(false);
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 }  // namespace score::mw::lifecycle::internal::saf::daemon
