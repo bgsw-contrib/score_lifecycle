@@ -83,7 +83,7 @@ lm_cc_test(
     deps = [
         ":health_monitor_impl",
         "//score/launch_manager/src/daemon/src/configuration:config",
-        "//tests/utils/mocks:mock_clock",
+        "//tests/utils/mocks:mock_syscalls",
         "@googletest//:gtest_main",
     ],
 )
@@ -99,7 +99,7 @@ lm_cc_test(
     deps = [
         ":cyclic_executor",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/timers:timers_os_clock",
-        "//tests/utils/mocks:mock_clock",
+        "//tests/utils/mocks:mock_syscalls",
         "@googletest//:gtest_main",
     ],
 )

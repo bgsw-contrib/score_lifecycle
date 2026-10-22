@@ -156,7 +156,7 @@ TEST_F(SupervisionManagerReserveTest, Reserve_WithValidSize_ReserveSpace)
     SupervisionManager manager(std::move(mockFactory));
 
     manager.reserve(10);
-    ASSERT_FALSE(manager.full());
+    EXPECT_FALSE(manager.full());
 }
 
 TEST_F(SupervisionManagerReserveTest, Reserve_WithZeroSize_DoesNotAllocate)
@@ -167,7 +167,7 @@ TEST_F(SupervisionManagerReserveTest, Reserve_WithZeroSize_DoesNotAllocate)
     SupervisionManager manager(std::move(mockFactory));
 
     manager.reserve(0);
-    ASSERT_TRUE(manager.full());
+    EXPECT_TRUE(manager.full());
 }
 
 TEST_F(SupervisionManagerReserveTest, Reserve_WithLargeSize_ReservesLargeCapacity)
@@ -178,7 +178,7 @@ TEST_F(SupervisionManagerReserveTest, Reserve_WithLargeSize_ReservesLargeCapacit
     SupervisionManager manager(std::move(mockFactory));
 
     manager.reserve(1000);
-    ASSERT_FALSE(manager.full());
+    EXPECT_FALSE(manager.full());
 }
 
 class SupervisionManagerFullTest : public SupervisionManagerTest
@@ -192,7 +192,7 @@ TEST_F(SupervisionManagerFullTest, Full_WithoutReserve_ReturnsTrueImmediately)
     auto mockFactory = std::make_unique<MockFactory>();
     SupervisionManager manager(std::move(mockFactory));
 
-    ASSERT_TRUE(manager.full());
+    EXPECT_TRUE(manager.full());
 }
 
 TEST_F(SupervisionManagerFullTest, Full_AfterReserve_ReturnsFalse)
@@ -203,7 +203,7 @@ TEST_F(SupervisionManagerFullTest, Full_AfterReserve_ReturnsFalse)
     SupervisionManager manager(std::move(mockFactory));
 
     manager.reserve(5);
-    ASSERT_FALSE(manager.full());
+    EXPECT_FALSE(manager.full());
 }
 
 class SupervisionManagerConstructWorkerTest : public SupervisionManagerTest
@@ -235,7 +235,7 @@ TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAllSuccessfulC
 
     bool result = manager.constructWorker(componentId, compConfig, 1000, recoveryClient, reader);
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithObservableEventFailure_ReturnsFalse)
@@ -258,7 +258,7 @@ TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithObservableEven
 
     bool result = manager.constructWorker(componentId, compConfig, 1000, recoveryClient, reader);
 
-    ASSERT_FALSE(result);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAliveIfIpcFailure_ReturnsFalse)
@@ -283,7 +283,7 @@ TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAliveIfIpcFail
 
     bool result = manager.constructWorker(componentId, compConfig, 1000, recoveryClient, reader);
 
-    ASSERT_FALSE(result);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAliveIfFailure_ReturnsFalse)
@@ -309,7 +309,7 @@ TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAliveIfFailure
 
     bool result = manager.constructWorker(componentId, compConfig, 1000, recoveryClient, reader);
 
-    ASSERT_FALSE(result);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAliveSupervisionFailure_ReturnsFalse)
@@ -336,7 +336,7 @@ TEST_F(SupervisionManagerConstructWorkerTest, ConstructWorker_WithAliveSupervisi
 
     bool result = manager.constructWorker(componentId, compConfig, 1000, recoveryClient, reader);
 
-    ASSERT_FALSE(result);
+    EXPECT_FALSE(result);
 }
 
 class SupervisionManagerEvaluateSupervisionsTest : public SupervisionManagerTest
@@ -352,7 +352,7 @@ TEST_F(SupervisionManagerEvaluateSupervisionsTest, EvaluateSupervisions_WithNoSu
     manager.reserve(5);
 
     // Verify manager is in valid state
-    ASSERT_FALSE(manager.full());
+    EXPECT_FALSE(manager.full());
 }
 
 class SupervisionManagerPerformCyclicTriggersTest : public SupervisionManagerTest
@@ -421,12 +421,12 @@ TEST_F(SupervisionManagerPerformCyclicTriggersTest, ConstructWorker_MultipleWork
     bool result2 = manager.constructWorker(componentId2, compConfig, 1001, recoveryClient, reader);
     bool result3 = manager.constructWorker(componentId3, compConfig, 1002, recoveryClient, reader);
 
-    ASSERT_TRUE(result1);
-    ASSERT_TRUE(result2);
-    ASSERT_TRUE(result3);
+    EXPECT_TRUE(result1);
+    EXPECT_TRUE(result2);
+    EXPECT_TRUE(result3);
 
     // Verify manager is not full after 3 constructions
-    ASSERT_FALSE(manager.full());
+    EXPECT_FALSE(manager.full());
 }
 
 TEST_F(SupervisionManagerPerformCyclicTriggersTest, PerformCyclicTriggers_LoopsExecuteForNonEmptySupervisions)
@@ -525,11 +525,11 @@ TEST_F(SupervisionManagerPerformCyclicTriggersTest, HasAnyRecoveryEnqueueFailed_
     eventPtr->event.eventType = SupervisionEventType::kActivation;
     eventPtr->pushData();
 
-    ASSERT_FALSE(manager.hasAnyRecoveryEnqueueFailed());
+    EXPECT_FALSE(manager.hasAnyRecoveryEnqueueFailed());
 
     manager.performCyclicTriggers(std::chrono::nanoseconds{11});
     manager.performCyclicTriggers(std::chrono::nanoseconds{1000011});
 
-    ASSERT_TRUE(manager.hasAnyRecoveryEnqueueFailed());
+    EXPECT_TRUE(manager.hasAnyRecoveryEnqueueFailed());
 }
 }  // namespace score::mw::lifecycle::internal::saf::daemon

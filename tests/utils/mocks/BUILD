@@ -14,12 +14,6 @@
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
 cc_library(
-    name = "mock_clock",
-    hdrs = ["mock_clock.hpp"],
-    visibility = ["//score:__subpackages__"],
-)
-
-cc_library(
     name = "mock_syscalls",
     hdrs = ["mock_syscalls.hpp"],
     visibility = ["//score:__subpackages__"],

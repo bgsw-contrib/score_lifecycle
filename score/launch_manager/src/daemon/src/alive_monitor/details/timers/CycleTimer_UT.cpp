@@ -44,13 +44,11 @@ class CycleTimerTest : public ::testing::Test
     {
         RecordProperty("TestType", "unit-test");
     }
-
 };
 
 class CycleTimerConstructorTest : public CycleTimerTest
 {
 };
-
 
 TEST_F(CycleTimerConstructorTest, Constructor_WithNullInterface_InitializesSuccessfully)
 {
@@ -74,7 +72,7 @@ TEST_F(CycleTimerInitTest, Init_NullInterfaceAndValidInterval_ReturnsErrorMinusT
     CycleTimer timer(nullptr);
     auto result = timer.init(10000ns);
 
-    ASSERT_EQ(result, std::chrono::nanoseconds{-2});
+    EXPECT_EQ(result, std::chrono::nanoseconds{-2});
 }
 
 TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndZeroInterval_ReturnsErrorMinusThree)
@@ -86,7 +84,7 @@ TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndZeroInterval_ReturnsErrorMinusT
     CycleTimer timer(&mockClock);
 
     auto result = timer.init(0ns);
-    ASSERT_EQ(result, std::chrono::nanoseconds{-3});
+    EXPECT_EQ(result, std::chrono::nanoseconds{-3});
 }
 
 TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndNegativeInterval_ReturnsErrorMinusThree)
@@ -98,18 +96,21 @@ TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndNegativeInterval_ReturnsErrorMi
     CycleTimer timer(&mockClock);
 
     auto result = timer.init(std::chrono::nanoseconds{-1});
-    ASSERT_EQ(result, std::chrono::nanoseconds{-3});
+    EXPECT_EQ(result, std::chrono::nanoseconds{-3});
 }
 
 TEST_F(CycleTimerInitTest, Init_NullInterfaceAndInvalidInterval_ReturnsErrorMinusTwo)
 {
     RecordProperty("DerivationTechnique", "equivalence-classes");
-    RecordProperty("Description", "Verify that init returns -2 when interface is null and the interval is invalid; the interface check takes precedence.");
+    RecordProperty(
+        "Description",
+        "Verify that init returns -2 when interface is null and the interval is invalid; the interface check takes "
+        "precedence.");
 
     CycleTimer timer(nullptr);
 
     auto result = timer.init(0ns);
-    ASSERT_EQ(result, std::chrono::nanoseconds{-2});
+    EXPECT_EQ(result, std::chrono::nanoseconds{-2});
 }
 
 TEST_F(CycleTimerInitTest, Init_WithClockGetTimeFailure_ReturnsErrorMinusOne)
@@ -123,7 +124,7 @@ TEST_F(CycleTimerInitTest, Init_WithClockGetTimeFailure_ReturnsErrorMinusOne)
     CycleTimer timer(&mockClock);
     auto result = timer.init(10000ns);
 
-    ASSERT_EQ(result, std::chrono::nanoseconds{-1});
+    EXPECT_EQ(result, std::chrono::nanoseconds{-1});
 }
 
 TEST_F(CycleTimerInitTest, Init_WithValidInterval_ReturnsInterval)
@@ -140,7 +141,7 @@ TEST_F(CycleTimerInitTest, Init_WithValidInterval_ReturnsInterval)
     std::chrono::nanoseconds interval = 10000ns;
     auto result = timer.init(interval);
 
-    ASSERT_EQ(result, interval);
+    EXPECT_EQ(result, interval);
 }
 
 class CycleTimerStartTest : public CycleTimerTest
@@ -165,7 +166,7 @@ TEST_F(CycleTimerStartTest, Start_ReturnsCurrentTimestamp)
     auto result = timer.start();
 
     // 10 seconds + 123456789 nanoseconds = 10123456789 nanoseconds
-    ASSERT_EQ(result.count(), 10123456789);
+    EXPECT_EQ(result.count(), 10123456789);
 }
 
 TEST_F(CycleTimerStartTest, Start_WithClockGetTimeFailure_ReturnsZero)
@@ -185,7 +186,7 @@ TEST_F(CycleTimerStartTest, Start_WithClockGetTimeFailure_ReturnsZero)
     EXPECT_CALL(mockClock, clockGetTime).WillOnce(Return(-1));
     auto result = timer.start();
 
-    ASSERT_EQ(result, 0ns);
+    EXPECT_EQ(result, 0ns);
 }
 
 class CycleTimerCalcNextShotTest : public CycleTimerTest
@@ -213,8 +214,8 @@ TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_AddsIntervalToDeadline)
     struct timespec& nextShot = timer.calcNextShot();
 
     // Initial deadline: 10.5s, add 1.0s = 11.5s
-    ASSERT_EQ(nextShot.tv_sec, 11);
-    ASSERT_EQ(nextShot.tv_nsec, 500000000);
+    EXPECT_EQ(nextShot.tv_sec, 11);
+    EXPECT_EQ(nextShot.tv_nsec, 500000000);
 }
 
 TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_HandlesNanosecondOverflow)
@@ -238,8 +239,8 @@ TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_HandlesNanosecondOverflow)
     struct timespec& nextShot = timer.calcNextShot();
 
     // 10.9s + 0.2s = 11.1s
-    ASSERT_EQ(nextShot.tv_sec, 11);
-    ASSERT_EQ(nextShot.tv_nsec, 100000000);
+    EXPECT_EQ(nextShot.tv_sec, 11);
+    EXPECT_EQ(nextShot.tv_nsec, 100000000);
 }
 
 TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_MultipleOverflows)
@@ -263,8 +264,8 @@ TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_MultipleOverflows)
     struct timespec& nextShot = timer.calcNextShot();
 
     // 10.999999999s + 2s = 12.999999999s
-    ASSERT_EQ(nextShot.tv_sec, 12);
-    ASSERT_EQ(nextShot.tv_nsec, 999999999);
+    EXPECT_EQ(nextShot.tv_sec, 12);
+    EXPECT_EQ(nextShot.tv_nsec, 999999999);
 }
 
 class CycleTimerSleepTest : public CycleTimerTest
@@ -299,8 +300,8 @@ TEST_F(CycleTimerSleepTest, Sleep_WithDeadlineNotReached_SucceedsSleep)
     std::chrono::nanoseconds overDeadline{0};
     int result = timer.sleep(terminate, overDeadline);
 
-    ASSERT_EQ(result, 0);
-    ASSERT_EQ(overDeadline.count(), 0);
+    EXPECT_EQ(result, 0);
+    EXPECT_EQ(overDeadline.count(), 0);
 }
 
 TEST_F(CycleTimerSleepTest, Sleep_WithDeadlineAlreadyPassed_ReturnsDeadlineAlreadyOver)
@@ -330,8 +331,8 @@ TEST_F(CycleTimerSleepTest, Sleep_WithDeadlineAlreadyPassed_ReturnsDeadlineAlrea
     std::chrono::nanoseconds overDeadline{0};
     int result = timer.sleep(terminate, overDeadline);
 
-    ASSERT_EQ(result, CycleTimer::kDeadlineAlreadyOver);
-    ASSERT_EQ(overDeadline, 100000ns);
+    EXPECT_EQ(result, CycleTimer::kDeadlineAlreadyOver);
+    EXPECT_EQ(overDeadline, 100000ns);
 }
 
 TEST_F(CycleTimerSleepTest, Sleep_WithTerminationSignal_BreaksFromLoop)
@@ -361,7 +362,7 @@ TEST_F(CycleTimerSleepTest, Sleep_WithTerminationSignal_BreaksFromLoop)
 
     const int result = timer.sleep(terminate, overDeadline);
 
-    ASSERT_EQ(result, EINTR);
+    EXPECT_EQ(result, EINTR);
 }
 
 }  // namespace score::mw::lifecycle::internal::saf::timers
