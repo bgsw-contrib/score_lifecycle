@@ -192,10 +192,6 @@ TEST_F(AliveMonitorImplInitTest, Init_CanBeCalledMultipleTimes)
     ASSERT_TRUE(result2);
 }
 
-class AliveMonitorImplStartStopMonitoringTest : public AliveMonitorImplTest
-{
-};
-
 class AliveMonitorImplGetSupervisionFactoryTest : public AliveMonitorImplTest
 {
 };

@@ -181,7 +181,8 @@ int __wrap_access(const char* name, int type)
 }
 
 // wrap for mmap
-extern void* __real_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd, off_t __offset) __attribute__((weak));
+extern void* __real_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd, off_t __offset)
+    __attribute__((weak));
 
 void* __wrap_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd, off_t __offset)
 {
@@ -246,7 +247,8 @@ int __wrap_setuid(uid_t __uid)
 }
 
 // wrap for sched_setscheduler
-extern int __real_sched_setscheduler(pid_t __pid, int __policy, const struct sched_param* __param) __attribute__((weak));
+extern int __real_sched_setscheduler(pid_t __pid, int __policy, const struct sched_param* __param)
+    __attribute__((weak));
 
 int __wrap_sched_setscheduler(pid_t __pid, int __policy, const struct sched_param* __param)
 {

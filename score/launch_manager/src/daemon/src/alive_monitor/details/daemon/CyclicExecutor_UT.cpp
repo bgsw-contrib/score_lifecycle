@@ -359,7 +359,9 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_DeadlineAlreadyOver_ContinuesUnti
         .WillOnce(DoAll(SetArgPointee<0>(start), Return(0)))
         .WillRepeatedly(DoAll(
             SetArgPointee<0>(pastDeadline),
-            InvokeWithoutArgs([this] { terminate_.store(true); }),
+            InvokeWithoutArgs([this] {
+                terminate_.store(true);
+            }),
             Return(0)));
 
     ASSERT_TRUE(executor.startCyclicExec(terminate_));
