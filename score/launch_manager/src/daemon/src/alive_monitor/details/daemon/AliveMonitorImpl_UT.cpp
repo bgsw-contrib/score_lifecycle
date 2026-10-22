@@ -24,7 +24,7 @@
 #include "score/mw/launch_manager/alive_monitor/details/timers/OsClockInterface.hpp"
 #include "score/mw/launch_manager/configuration/config.hpp"
 #include "score/mw/launch_manager/recovery_client/irecovery_client.h"
-#include "tests/utils/mocks/mock_clock.hpp"
+#include "tests/utils/mocks/mock_syscalls.hpp"
 
 using namespace testing;
 
@@ -195,7 +195,6 @@ TEST_F(AliveMonitorImplInitTest, Init_CanBeCalledMultipleTimes)
 class AliveMonitorImplStartStopMonitoringTest : public AliveMonitorImplTest
 {
 };
-
 
 class AliveMonitorImplGetSupervisionFactoryTest : public AliveMonitorImplTest
 {

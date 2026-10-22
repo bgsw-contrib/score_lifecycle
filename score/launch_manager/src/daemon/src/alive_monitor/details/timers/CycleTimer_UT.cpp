@@ -44,13 +44,11 @@ class CycleTimerTest : public ::testing::Test
     {
         RecordProperty("TestType", "unit-test");
     }
-
 };
 
 class CycleTimerConstructorTest : public CycleTimerTest
 {
 };
-
 
 TEST_F(CycleTimerConstructorTest, Constructor_WithNullInterface_InitializesSuccessfully)
 {
@@ -104,7 +102,10 @@ TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndNegativeInterval_ReturnsErrorMi
 TEST_F(CycleTimerInitTest, Init_NullInterfaceAndInvalidInterval_ReturnsErrorMinusTwo)
 {
     RecordProperty("DerivationTechnique", "equivalence-classes");
-    RecordProperty("Description", "Verify that init returns -2 when interface is null and the interval is invalid; the interface check takes precedence.");
+    RecordProperty(
+        "Description",
+        "Verify that init returns -2 when interface is null and the interval is invalid; the interface check takes "
+        "precedence.");
 
     CycleTimer timer(nullptr);
 

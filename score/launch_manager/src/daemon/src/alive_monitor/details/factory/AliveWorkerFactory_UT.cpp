@@ -269,7 +269,8 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponent
         "Description",
         "Exercise the duplicate-registration error path of createObservableEvent. "
         "registerObservableEvent() returns false when component_id already exists in map. "
-        "Second call with same ID triggers: emplace succeeds but registration fails, executing the final return false.");
+        "Second call with same ID triggers: emplace succeeds but registration fails, executing the final return "
+        "false.");
 
     std::vector<ifexm::ObservableEvent> events;
     auto buffer = std::make_shared<SupervisionBufferType>();
