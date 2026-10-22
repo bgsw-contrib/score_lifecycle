@@ -75,9 +75,15 @@ cc_library(
 lm_cc_test(
     name = "AliveMonitorImpl_UT",
     srcs = ["AliveMonitorImpl_UT.cpp"],
+    linkopts = [
+        "-Wl,--wrap=clock_gettime",
+        "-Wl,--wrap=clock_getres",
+    ],
+    linkstatic = True,
     deps = [
         ":health_monitor_impl",
         "//score/launch_manager/src/daemon/src/configuration:config",
+        "//tests/utils/mocks:mock_clock",
         "@googletest//:gtest_main",
     ],
 )
@@ -85,9 +91,15 @@ lm_cc_test(
 lm_cc_test(
     name = "CyclicExecutor_UT",
     srcs = ["CyclicExecutor_UT.cpp"],
+    linkopts = [
+        "-Wl,--wrap=clock_gettime",
+        "-Wl,--wrap=clock_getres",
+    ],
+    linkstatic = True,
     deps = [
         ":cyclic_executor",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/timers:timers_os_clock",
+        "//tests/utils/mocks:mock_clock",
         "@googletest//:gtest_main",
     ],
 )

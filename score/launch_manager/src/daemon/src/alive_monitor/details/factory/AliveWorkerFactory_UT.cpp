@@ -94,10 +94,9 @@ class AliveWorkerFactoryErrorPathTest : public ::testing::Test
     {
         RecordProperty("TestType", "error-path-unit-test");
         RecordProperty("DerivationTechnique", "error-condition-injection");
-        factory_ = std::make_unique<AliveWorkerFactory>();
     }
 
-    std::unique_ptr<AliveWorkerFactory> factory_;
+    AliveWorkerFactory factory_;
 };
 
 // EmplaceAndAttach catch block: allocation failure while emplacing the observer
@@ -109,7 +108,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIf_AllocationFailureReturnsFa
 
     // First allocation is the vector storage inside emplace_back.
     g_allocationsUntilFailure.store(0);
-    const bool result = factory_->createAliveIf(interfaces, server, event);
+    const bool result = factory_.createAliveIf(interfaces, server, event);
     g_allocationsUntilFailure.store(-1);
 
     EXPECT_FALSE(result);
@@ -126,7 +125,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_AllocationFailureR
     const IdentifierHash id{std::string_view{"alloc_fail_event"}};
 
     g_allocationsUntilFailure.store(0);
-    const bool result = factory_->createObservableEvent(events, id, reader);
+    const bool result = factory_.createObservableEvent(events, id, reader);
     g_allocationsUntilFailure.store(-1);
 
     EXPECT_FALSE(result);
@@ -140,7 +139,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AllocationFailureReturn
     const IdentifierHash id{std::string_view{"alloc_fail_ipc"}};
 
     g_allocationsUntilFailure.store(0);
-    const bool result = factory_->createAliveIfIpc(servers, id, 1000);
+    const bool result = factory_.createAliveIfIpc(servers, id, 1000);
     g_allocationsUntilFailure.store(-1);
 
     EXPECT_FALSE(result);
@@ -153,7 +152,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_WithOwnUid_Succeeds)
     std::vector<ifappl::CheckpointIpcServer> servers;
     const IdentifierHash id{std::string_view{"own_uid_ipc_channel"}};
 
-    ASSERT_TRUE(factory_->createAliveIfIpc(servers, id, getuid()));
+    ASSERT_TRUE(factory_.createAliveIfIpc(servers, id, getuid()));
     EXPECT_EQ(servers.size(), 1U);
 }
 
@@ -169,7 +168,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_FdLimitFailsInit)
     restricted.rlim_cur = 0;
     ASSERT_EQ(setrlimit(RLIMIT_NOFILE, &restricted), 0);
 
-    const bool result = factory_->createAliveIfIpc(servers, id, getuid());
+    const bool result = factory_.createAliveIfIpc(servers, id, getuid());
 
     ASSERT_EQ(setrlimit(RLIMIT_NOFILE, &original), 0);
     EXPECT_FALSE(result);
@@ -191,7 +190,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_PermissionDeniedExercis
     IdentifierHash componentId{std::string_view{"error_test_ipc_permission"}};
     uid_t rootUid = 0;  // Root UID that typically causes permission issues
 
-    bool result = factory_->createAliveIfIpc(servers, componentId, rootUid);
+    bool result = factory_.createAliveIfIpc(servers, componentId, rootUid);
 
     // Result may be false if permission check fails, which exercises error paths
     // If false: the init or ACL failure branch executed
@@ -222,7 +221,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_ServerEntryIsKeptRegard
     IdentifierHash componentId{std::string_view{"error_test_ipc_exception"}};
     uid_t invalidUid = 65534;  // Non-root but potentially restrictive UID
 
-    [[maybe_unused]] bool result = factory_->createAliveIfIpc(servers, componentId, invalidUid);
+    [[maybe_unused]] bool result = factory_.createAliveIfIpc(servers, componentId, invalidUid);
 
     ASSERT_EQ(servers.size(), 1U);
 }
@@ -252,7 +251,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfIpc_AclSetupFailureReturnsF
     restricted.rlim_cur = static_cast<rlim_t>(lowestFreeFd) + 1U;
     ASSERT_EQ(setrlimit(RLIMIT_NOFILE, &restricted), 0);
 
-    const bool result = factory_->createAliveIfIpc(servers, id, getuid());
+    const bool result = factory_.createAliveIfIpc(servers, id, getuid());
 
     ASSERT_EQ(setrlimit(RLIMIT_NOFILE, &original), 0);
     EXPECT_FALSE(result);
@@ -270,8 +269,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponent
         "Description",
         "Exercise the duplicate-registration error path of createObservableEvent. "
         "registerObservableEvent() returns false when component_id already exists in map. "
-        "Second call with same ID triggers: emplace succeeds but registration fails, executing the final return "
-        "false.");
+        "Second call with same ID triggers: emplace succeeds but registration fails, executing the final return false.");
 
     std::vector<ifexm::ObservableEvent> events;
     auto buffer = std::make_shared<SupervisionBufferType>();
@@ -281,7 +279,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponent
     IdentifierHash duplicateId{std::string_view{"duplicate_component"}};
 
     // First call succeeds - happy path
-    bool result1 = factory_->createObservableEvent(events, duplicateId, reader);
+    bool result1 = factory_.createObservableEvent(events, duplicateId, reader);
     ASSERT_TRUE(result1) << "First createObservableEvent should succeed";
     ASSERT_EQ(events.size(), 1);
 
@@ -289,7 +287,7 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateObservableEvent_DuplicateComponent
     // This triggers: emplace_back succeeds BUT
     // registerObservableEvent returns false (the duplicate key is rejected)
     // So the success branch is skipped and the final return false executes
-    bool result2 = factory_->createObservableEvent(events, duplicateId, reader);
+    bool result2 = factory_.createObservableEvent(events, duplicateId, reader);
     ASSERT_FALSE(result2) << "Second createObservableEvent with duplicate ID should fail (final return false)";
     ASSERT_EQ(events.size(), 2) << "Vector still has 2 entries even though second registration failed";
 
@@ -328,15 +326,15 @@ TEST_F(AliveWorkerFactoryErrorPathTest, CreateAliveIfAndSupervision_WithValidInp
     config.reporting_cycle_ms = 100;
 
     const IdentifierHash id{std::string_view{"test_component_1"}};
-    ASSERT_TRUE(factory_->createObservableEvent(events, id, reader));
+    ASSERT_TRUE(factory_.createObservableEvent(events, id, reader));
     ASSERT_EQ(events.size(), 1U);
 
     servers.emplace_back();
 
-    ASSERT_TRUE(factory_->createAliveIf(interfaces, servers[0], events[0]));
+    ASSERT_TRUE(factory_.createAliveIf(interfaces, servers[0], events[0]));
     ASSERT_EQ(interfaces.size(), 1U);
 
-    ASSERT_TRUE(factory_->createAliveSupervision(supervisions, interfaces[0], events[0], mockClient, id, config));
+    ASSERT_TRUE(factory_.createAliveSupervision(supervisions, interfaces[0], events[0], mockClient, id, config));
     ASSERT_EQ(supervisions.size(), 1U);
 }
 
