@@ -145,7 +145,7 @@ TEST_F(AliveMonitorImplInitTest, Init_WithValidConfig_ReturnsTrue)
     AliveMonitorImpl monitor(mockClient_, config, 5);
     bool result = monitor.init();
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 TEST_F(AliveMonitorImplInitTest, Init_WithZeroCycleTime_ReturnsTrue)
@@ -160,7 +160,7 @@ TEST_F(AliveMonitorImplInitTest, Init_WithZeroCycleTime_ReturnsTrue)
 
     // Depending on clock accuracy, this might fail or succeed
     // We're testing it doesn't crash
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 TEST_F(AliveMonitorImplInitTest, Init_WithLargeCycleTime_ReturnsTrue)
@@ -173,7 +173,7 @@ TEST_F(AliveMonitorImplInitTest, Init_WithLargeCycleTime_ReturnsTrue)
     AliveMonitorImpl monitor(mockClient_, config, 5);
     bool result = monitor.init();
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 TEST_F(AliveMonitorImplInitTest, Init_CanBeCalledMultipleTimes)
@@ -188,8 +188,8 @@ TEST_F(AliveMonitorImplInitTest, Init_CanBeCalledMultipleTimes)
     bool result1 = monitor.init();
     bool result2 = monitor.init();
 
-    ASSERT_TRUE(result1);
-    ASSERT_TRUE(result2);
+    EXPECT_TRUE(result1);
+    EXPECT_TRUE(result2);
 }
 
 class AliveMonitorImplGetSupervisionFactoryTest : public AliveMonitorImplTest
@@ -224,7 +224,7 @@ TEST_F(AliveMonitorImplInitErrorPathsTest, Init_ClockResolutionUnavailable_Retur
     const bool result = monitor.init();
     g_fail_clock_getres.store(false);
 
-    ASSERT_FALSE(result);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(AliveMonitorImplInitErrorPathsTest, Init_StdExceptionDuringInit_ReturnsFalse)
@@ -238,8 +238,8 @@ TEST_F(AliveMonitorImplInitErrorPathsTest, Init_StdExceptionDuringInit_ReturnsFa
     const bool failureConsumed = (g_failNextAllocation.load() == 0);
     g_failNextAllocation.store(0);
 
-    ASSERT_TRUE(failureConsumed);
-    ASSERT_FALSE(result);
+    EXPECT_TRUE(failureConsumed);
+    EXPECT_FALSE(result);
 }
 
 TEST_F(AliveMonitorImplInitErrorPathsTest, Init_NonStdExceptionDuringInit_ReturnsFalse)
@@ -253,8 +253,8 @@ TEST_F(AliveMonitorImplInitErrorPathsTest, Init_NonStdExceptionDuringInit_Return
     const bool failureConsumed = (g_failNextAllocation.load() == 0);
     g_failNextAllocation.store(0);
 
-    ASSERT_TRUE(failureConsumed);
-    ASSERT_FALSE(result);
+    EXPECT_TRUE(failureConsumed);
+    EXPECT_FALSE(result);
 }
 
 }  // namespace score::mw::lifecycle::internal::saf::daemon

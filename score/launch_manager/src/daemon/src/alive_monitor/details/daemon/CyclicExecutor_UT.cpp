@@ -120,7 +120,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithValidConfig_ReturnsNoError)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 TEST_F(CyclicExecutorInitTest, Init_WithSmallCycleTime_ReturnsNoError)
@@ -133,7 +133,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithSmallCycleTime_ReturnsNoError)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 TEST_F(CyclicExecutorInitTest, Init_WithLargeCycleTime_ReturnsNoError)
@@ -146,7 +146,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithLargeCycleTime_ReturnsNoError)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 TEST_F(CyclicExecutorInitTest, Init_WithValidCycleTimer_SetsInitialization)
@@ -163,7 +163,7 @@ TEST_F(CyclicExecutorInitTest, Init_WithValidCycleTimer_SetsInitialization)
 
     daemon::EInitCode result = executor.init(mockRecoveryClient_, config);
 
-    ASSERT_EQ(result, daemon::EInitCode::kNoError);
+    EXPECT_EQ(result, daemon::EInitCode::kNoError);
 }
 
 class CyclicExecutorStartTest : public CyclicExecutorTest
@@ -186,7 +186,7 @@ TEST_F(CyclicExecutorStartTest, StartCyclicExec_WithImmediateTermination_Returns
     std::atomic_bool terminate{true};
     bool result = executor.startCyclicExec(terminate);
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 class CyclicExecutorConstructSupervisionTest : public CyclicExecutorTest
@@ -215,7 +215,7 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_WithValidPar
 
     auto handle = executor.constructSupervision(componentId, uid_, compConfig);
 
-    ASSERT_NE(handle, nullptr);
+    EXPECT_NE(handle, nullptr);
 }
 
 TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
@@ -240,8 +240,8 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupe
     auto handle1 = executor.constructSupervision(componentId1, uid_, compConfig);
     auto handle2 = executor.constructSupervision(componentId2, uid_, compConfig);
 
-    ASSERT_NE(handle1, nullptr);
-    ASSERT_NE(handle2, nullptr);
+    EXPECT_NE(handle1, nullptr);
+    EXPECT_NE(handle2, nullptr);
 }
 
 TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_DuplicateId_ReturnsNullptr)
@@ -262,7 +262,7 @@ TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_DuplicateId_
 
     const IdentifierHash id{"component1"};
     ASSERT_NE(executor.constructSupervision(id, uid_, compConfig), nullptr);
-    ASSERT_EQ(executor.constructSupervision(id, uid_, compConfig), nullptr);
+    EXPECT_EQ(executor.constructSupervision(id, uid_, compConfig), nullptr);
 }
 
 TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_ExceedingCapacity_Asserts)
@@ -317,7 +317,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_InitialTimestampFails_ReturnsFals
 
     EXPECT_CALL(mockClock_, clockGetTime).WillRepeatedly(Return(-1));
 
-    ASSERT_FALSE(executor.startCyclicExec(terminate_));
+    EXPECT_FALSE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepInterrupted_BreaksLoop)
@@ -330,7 +330,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepInterrupted_BreaksLoop)
         return EINTR;
     }));
 
-    ASSERT_TRUE(executor.startCyclicExec(terminate_));
+    EXPECT_TRUE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepFails_ContinuesUntilTerminated)
@@ -343,7 +343,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepFails_ContinuesUntilTerminat
         return EINVAL;
     }));
 
-    ASSERT_TRUE(executor.startCyclicExec(terminate_));
+    EXPECT_TRUE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_DeadlineAlreadyOver_ContinuesUntilTerminated)
@@ -364,7 +364,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_DeadlineAlreadyOver_ContinuesUnti
             }),
             Return(0)));
 
-    ASSERT_TRUE(executor.startCyclicExec(terminate_));
+    EXPECT_TRUE(executor.startCyclicExec(terminate_));
 }
 
 TEST_F(CyclicExecutorLoopTest, StartCyclicExec_MonotonicClockUnavailable_UsesMaxSyncTimestamp)
@@ -373,23 +373,22 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_MonotonicClockUnavailable_UsesMax
     ASSERT_EQ(executor.init(mockRecoveryClient_, config_), daemon::EInitCode::kNoError);
 
     // The real clock failure only has to last until performCyclicTriggers() has read it.
-    int calls = 0;
-    EXPECT_CALL(mockClock_, clockGetTime).WillRepeatedly(Invoke([&](struct timespec* ts) {
-        ts->tv_sec = 10;
-        ts->tv_nsec = 0;
-        if (calls++ > 0)
-        {
-            g_fail_monotonic_clock_gettime.store(false);
-            terminate_.store(true);
-        }
-        return 0;
-    }));
+    const struct timespec now{10, 0};
+    EXPECT_CALL(mockClock_, clockGetTime)
+        .WillOnce(DoAll(SetArgPointee<0>(now), Return(0)))
+        .WillRepeatedly(DoAll(
+            SetArgPointee<0>(now),
+            InvokeWithoutArgs([this] {
+                g_fail_monotonic_clock_gettime.store(false);
+                terminate_.store(true);
+            }),
+            Return(0)));
 
     g_fail_monotonic_clock_gettime.store(true);
     const bool result = executor.startCyclicExec(terminate_);
     g_fail_monotonic_clock_gettime.store(false);
 
-    ASSERT_TRUE(result);
+    EXPECT_TRUE(result);
 }
 
 }  // namespace score::mw::lifecycle::internal::saf::daemon
