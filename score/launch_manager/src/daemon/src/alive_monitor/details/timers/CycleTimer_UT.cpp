@@ -43,32 +43,18 @@ class CycleTimerTest : public ::testing::Test
     void SetUp() override
     {
         RecordProperty("TestType", "unit-test");
-        RecordProperty("DerivationTechnique", "boundary-values");
     }
 
-    // Helper to set time on mock
-    void SetMockTime(MockOsClockInterface& mock, struct timespec ts)
-    {
-        ON_CALL(mock, clockGetTime).WillByDefault(DoAll(SetArgPointee<0>(ts), Return(0)));
-    }
 };
 
-// --------------------------------------------------------------------------
-// Constructor
-// --------------------------------------------------------------------------
-
-TEST_F(CycleTimerTest, Constructor_WithValidInterface_InitializesSuccessfully)
+class CycleTimerConstructorTest : public CycleTimerTest
 {
-    RecordProperty("Description", "Verify that CycleTimer can be constructed with a valid OS clock interface.");
+};
 
-    MockOsClockInterface mockClock;
-    CycleTimer timer(&mockClock);
 
-    // No crash should occur
-}
-
-TEST_F(CycleTimerTest, Constructor_WithNullInterface_InitializesSuccessfully)
+TEST_F(CycleTimerConstructorTest, Constructor_WithNullInterface_InitializesSuccessfully)
 {
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that CycleTimer can be constructed with a null interface.");
 
     CycleTimer timer(nullptr);
@@ -76,13 +62,14 @@ TEST_F(CycleTimerTest, Constructor_WithNullInterface_InitializesSuccessfully)
     // No crash should occur
 }
 
-// --------------------------------------------------------------------------
-// init
-// --------------------------------------------------------------------------
-
-TEST_F(CycleTimerTest, Init_WithNullInterface_ReturnsErrorMinusTwo)
+class CycleTimerInitTest : public CycleTimerTest
 {
-    RecordProperty("Description", "Verify that init returns -2 when interface is null.");
+};
+
+TEST_F(CycleTimerInitTest, Init_NullInterfaceAndValidInterval_ReturnsErrorMinusTwo)
+{
+    RecordProperty("DerivationTechnique", "equivalence-classes");
+    RecordProperty("Description", "Verify that init returns -2 when interface is null and the interval is valid.");
 
     CycleTimer timer(nullptr);
     auto result = timer.init(10000ns);
@@ -90,9 +77,10 @@ TEST_F(CycleTimerTest, Init_WithNullInterface_ReturnsErrorMinusTwo)
     ASSERT_EQ(result, std::chrono::nanoseconds{-2});
 }
 
-TEST_F(CycleTimerTest, Init_WithInvalidInterval_ReturnsErrorMinusThree)
+TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndZeroInterval_ReturnsErrorMinusThree)
 {
-    RecordProperty("Description", "Verify that init returns -3 when sleep interval is invalid (zero).");
+    RecordProperty("DerivationTechnique", "boundary-values");
+    RecordProperty("Description", "Verify that init returns -3 when interface is valid and the interval is zero.");
 
     MockOsClockInterface mockClock;
     CycleTimer timer(&mockClock);
@@ -101,9 +89,10 @@ TEST_F(CycleTimerTest, Init_WithInvalidInterval_ReturnsErrorMinusThree)
     ASSERT_EQ(result, std::chrono::nanoseconds{-3});
 }
 
-TEST_F(CycleTimerTest, Init_WithNegativeInterval_ReturnsErrorMinusThree)
+TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndNegativeInterval_ReturnsErrorMinusThree)
 {
-    RecordProperty("Description", "Verify that init returns -3 when sleep interval is negative.");
+    RecordProperty("DerivationTechnique", "boundary-values");
+    RecordProperty("Description", "Verify that init returns -3 when interface is valid and the interval is negative.");
 
     MockOsClockInterface mockClock;
     CycleTimer timer(&mockClock);
@@ -112,8 +101,20 @@ TEST_F(CycleTimerTest, Init_WithNegativeInterval_ReturnsErrorMinusThree)
     ASSERT_EQ(result, std::chrono::nanoseconds{-3});
 }
 
-TEST_F(CycleTimerTest, Init_WithClockGetTimeFailure_ReturnsErrorMinusOne)
+TEST_F(CycleTimerInitTest, Init_NullInterfaceAndInvalidInterval_ReturnsErrorMinusTwo)
 {
+    RecordProperty("DerivationTechnique", "equivalence-classes");
+    RecordProperty("Description", "Verify that init returns -2 when interface is null and the interval is invalid; the interface check takes precedence.");
+
+    CycleTimer timer(nullptr);
+
+    auto result = timer.init(0ns);
+    ASSERT_EQ(result, std::chrono::nanoseconds{-2});
+}
+
+TEST_F(CycleTimerInitTest, Init_WithClockGetTimeFailure_ReturnsErrorMinusOne)
+{
+    RecordProperty("DerivationTechnique", "error-condition-injection");
     RecordProperty("Description", "Verify that init returns -1 when clockGetTime fails.");
 
     MockOsClockInterface mockClock;
@@ -125,8 +126,9 @@ TEST_F(CycleTimerTest, Init_WithClockGetTimeFailure_ReturnsErrorMinusOne)
     ASSERT_EQ(result, std::chrono::nanoseconds{-1});
 }
 
-TEST_F(CycleTimerTest, Init_WithValidInterval_ReturnsInterval)
+TEST_F(CycleTimerInitTest, Init_WithValidInterval_ReturnsInterval)
 {
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that init returns the configured interval on success.");
 
     MockOsClockInterface mockClock;
@@ -141,14 +143,16 @@ TEST_F(CycleTimerTest, Init_WithValidInterval_ReturnsInterval)
     ASSERT_EQ(result, interval);
 }
 
-// --------------------------------------------------------------------------
-// start
-// --------------------------------------------------------------------------
-
-TEST_F(CycleTimerTest, Start_ReturnsCurrentTimestamp)
+class CycleTimerStartTest : public CycleTimerTest
 {
+};
+
+TEST_F(CycleTimerStartTest, Start_ReturnsCurrentTimestamp)
+{
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that start returns the current timestamp on success.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 123456789};
 
@@ -164,10 +168,12 @@ TEST_F(CycleTimerTest, Start_ReturnsCurrentTimestamp)
     ASSERT_EQ(result.count(), 10123456789);
 }
 
-TEST_F(CycleTimerTest, Start_WithClockGetTimeFailure_ReturnsZero)
+TEST_F(CycleTimerStartTest, Start_WithClockGetTimeFailure_ReturnsZero)
 {
+    RecordProperty("DerivationTechnique", "error-condition-injection");
     RecordProperty("Description", "Verify that start returns zero when clockGetTime fails.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{0, 0};
 
@@ -182,14 +188,16 @@ TEST_F(CycleTimerTest, Start_WithClockGetTimeFailure_ReturnsZero)
     ASSERT_EQ(result, 0ns);
 }
 
-// --------------------------------------------------------------------------
-// calcNextShot
-// --------------------------------------------------------------------------
-
-TEST_F(CycleTimerTest, CalcNextShot_AddsIntervalToDeadline)
+class CycleTimerCalcNextShotTest : public CycleTimerTest
 {
+};
+
+TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_AddsIntervalToDeadline)
+{
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that calcNextShot correctly adds the sleep interval to the deadline.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 500000000};
 
@@ -209,10 +217,12 @@ TEST_F(CycleTimerTest, CalcNextShot_AddsIntervalToDeadline)
     ASSERT_EQ(nextShot.tv_nsec, 500000000);
 }
 
-TEST_F(CycleTimerTest, CalcNextShot_HandlesNanosecondOverflow)
+TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_HandlesNanosecondOverflow)
 {
+    RecordProperty("DerivationTechnique", "boundary-values");
     RecordProperty("Description", "Verify that calcNextShot correctly handles nanosecond overflow to seconds.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 900000000};  // 10.9s
 
@@ -232,10 +242,12 @@ TEST_F(CycleTimerTest, CalcNextShot_HandlesNanosecondOverflow)
     ASSERT_EQ(nextShot.tv_nsec, 100000000);
 }
 
-TEST_F(CycleTimerTest, CalcNextShot_MultipleOverflows)
+TEST_F(CycleTimerCalcNextShotTest, CalcNextShot_MultipleOverflows)
 {
+    RecordProperty("DerivationTechnique", "boundary-values");
     RecordProperty("Description", "Verify that calcNextShot correctly handles multiple nanosecond overflows.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 999999999};  // 10.999999999s
 
@@ -255,14 +267,16 @@ TEST_F(CycleTimerTest, CalcNextShot_MultipleOverflows)
     ASSERT_EQ(nextShot.tv_nsec, 999999999);
 }
 
-// --------------------------------------------------------------------------
-// sleep
-// --------------------------------------------------------------------------
-
-TEST_F(CycleTimerTest, Sleep_WithDeadlineNotReached_SucceedsSleep)
+class CycleTimerSleepTest : public CycleTimerTest
 {
+};
+
+TEST_F(CycleTimerSleepTest, Sleep_WithDeadlineNotReached_SucceedsSleep)
+{
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that sleep successfully waits when deadline has not been reached.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 0};
 
@@ -289,10 +303,12 @@ TEST_F(CycleTimerTest, Sleep_WithDeadlineNotReached_SucceedsSleep)
     ASSERT_EQ(overDeadline.count(), 0);
 }
 
-TEST_F(CycleTimerTest, Sleep_WithDeadlineAlreadyPassed_ReturnsDeadlineAlreadyOver)
+TEST_F(CycleTimerSleepTest, Sleep_WithDeadlineAlreadyPassed_ReturnsDeadlineAlreadyOver)
 {
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that sleep returns kDeadlineAlreadyOver when deadline has passed.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 0};
 
@@ -315,13 +331,15 @@ TEST_F(CycleTimerTest, Sleep_WithDeadlineAlreadyPassed_ReturnsDeadlineAlreadyOve
     int result = timer.sleep(terminate, overDeadline);
 
     ASSERT_EQ(result, CycleTimer::kDeadlineAlreadyOver);
-    ASSERT_GT(overDeadline.count(), 0);
+    ASSERT_EQ(overDeadline, 100000ns);
 }
 
-TEST_F(CycleTimerTest, Sleep_WithTerminationSignal_BreaksFromLoop)
+TEST_F(CycleTimerSleepTest, Sleep_WithTerminationSignal_BreaksFromLoop)
 {
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     RecordProperty("Description", "Verify that sleep respects termination signal and breaks from loop.");
 
+    InSequence seq;
     MockOsClockInterface mockClock;
     struct timespec ts{10, 0};
 

@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2025 Contributors to the Eclipse Foundation
+ * Copyright (c) 2026 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -14,12 +14,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <dlfcn.h>
 #include <unistd.h>
-#include <time.h>
 
 #include <atomic>
+#include <limits>
 #include <memory>
+#include <stdexcept>
 #include <thread>
 
 #include "score/mw/launch_manager/alive_monitor/details/daemon/CyclicExecutor.hpp"
@@ -27,25 +27,9 @@
 #include "score/mw/launch_manager/alive_monitor/details/timers/OsClockInterface.hpp"
 #include "score/mw/launch_manager/configuration/config.hpp"
 #include "score/mw/launch_manager/recovery_client/irecovery_client.h"
+#include "tests/utils/mocks/mock_clock.hpp"
 
 using namespace testing;
-
-namespace
-{
-std::atomic<bool> g_failMonotonicClockGetTime{false};
-}  // namespace
-
-// Overrides libc's clock_gettime so tests can make CLOCK_MONOTONIC reads fail.
-extern "C" int clock_gettime(clockid_t clock_id, struct timespec* ts)
-{
-    if (clock_id == CLOCK_MONOTONIC && g_failMonotonicClockGetTime.load())
-    {
-        return -1;
-    }
-    using Fn = int (*)(clockid_t, struct timespec*);
-    static const Fn real = reinterpret_cast<Fn>(dlsym(RTLD_NEXT, "clock_gettime"));
-    return real(clock_id, ts);
-}
 
 namespace score::mw::lifecycle::internal::saf::daemon
 {
@@ -96,42 +80,36 @@ class CyclicExecutorTest : public ::testing::Test
     std::shared_ptr<MockRecoveryClient> mockRecoveryClient_;
 };
 
-// --------------------------------------------------------------------------
-// Constructor
-// --------------------------------------------------------------------------
+class CyclicExecutorConstructorTest : public CyclicExecutorTest
+{
+};
 
-TEST_F(CyclicExecutorTest, Constructor_WithValidParameters_InitializesSuccessfully)
+TEST_F(CyclicExecutorConstructorTest, Constructor_WithValidParameters_InitializesSuccessfully)
 {
     RecordProperty("Description", "Verify that CyclicExecutor can be constructed with valid parameters.");
 
-    CyclicExecutor executor(mockClock_, 5);
-
-    ASSERT_NE(&executor, nullptr);
+    EXPECT_NO_THROW(CyclicExecutor(mockClock_, 5));
 }
 
-TEST_F(CyclicExecutorTest, Constructor_WithZeroComponents_InitializesSuccessfully)
+TEST_F(CyclicExecutorConstructorTest, Constructor_WithZeroComponents_InitializesSuccessfully)
 {
     RecordProperty("Description", "Verify that CyclicExecutor can be constructed with zero components.");
 
-    CyclicExecutor executor(mockClock_, 0);
-
-    ASSERT_NE(&executor, nullptr);
+    EXPECT_NO_THROW(CyclicExecutor(mockClock_, 0));
 }
 
-TEST_F(CyclicExecutorTest, Constructor_WithLargeComponentCount_InitializesSuccessfully)
+TEST_F(CyclicExecutorConstructorTest, Constructor_WithMaxComponentCount_ThrowsLengthError)
 {
-    RecordProperty("Description", "Verify that CyclicExecutor can be constructed with large component count.");
+    RecordProperty("Description", "Verify that the constructor throws when the component count exceeds vector capacity.");
 
-    CyclicExecutor executor(mockClock_, 1000);
-
-    ASSERT_NE(&executor, nullptr);
+    EXPECT_THROW(CyclicExecutor(mockClock_, std::numeric_limits<std::size_t>::max()), std::length_error);
 }
 
-// --------------------------------------------------------------------------
-// init
-// --------------------------------------------------------------------------
+class CyclicExecutorInitTest : public CyclicExecutorTest
+{
+};
 
-TEST_F(CyclicExecutorTest, Init_WithValidConfig_ReturnsNoError)
+TEST_F(CyclicExecutorInitTest, Init_WithValidConfig_ReturnsNoError)
 {
     RecordProperty("Description", "Verify that init returns kNoError with valid configuration.");
 
@@ -144,7 +122,7 @@ TEST_F(CyclicExecutorTest, Init_WithValidConfig_ReturnsNoError)
     ASSERT_EQ(result, daemon::EInitCode::kNoError);
 }
 
-TEST_F(CyclicExecutorTest, Init_WithSmallCycleTime_ReturnsNoError)
+TEST_F(CyclicExecutorInitTest, Init_WithSmallCycleTime_ReturnsNoError)
 {
     RecordProperty("Description", "Verify that init succeeds with small cycle time.");
 
@@ -157,7 +135,7 @@ TEST_F(CyclicExecutorTest, Init_WithSmallCycleTime_ReturnsNoError)
     ASSERT_EQ(result, daemon::EInitCode::kNoError);
 }
 
-TEST_F(CyclicExecutorTest, Init_WithLargeCycleTime_ReturnsNoError)
+TEST_F(CyclicExecutorInitTest, Init_WithLargeCycleTime_ReturnsNoError)
 {
     RecordProperty("Description", "Verify that init succeeds with large cycle time.");
 
@@ -170,7 +148,7 @@ TEST_F(CyclicExecutorTest, Init_WithLargeCycleTime_ReturnsNoError)
     ASSERT_EQ(result, daemon::EInitCode::kNoError);
 }
 
-TEST_F(CyclicExecutorTest, Init_WithValidCycleTimer_SetsInitialization)
+TEST_F(CyclicExecutorInitTest, Init_WithValidCycleTimer_SetsInitialization)
 {
     RecordProperty("Description", "Verify that init properly initializes the cycle timer.");
 
@@ -187,11 +165,11 @@ TEST_F(CyclicExecutorTest, Init_WithValidCycleTimer_SetsInitialization)
     ASSERT_EQ(result, daemon::EInitCode::kNoError);
 }
 
-// --------------------------------------------------------------------------
-// startCyclicExec
-// --------------------------------------------------------------------------
+class CyclicExecutorStartTest : public CyclicExecutorTest
+{
+};
 
-TEST_F(CyclicExecutorTest, StartCyclicExec_WithImmediateTermination_ReturnsTrue)
+TEST_F(CyclicExecutorStartTest, StartCyclicExec_WithImmediateTermination_ReturnsTrue)
 {
     RecordProperty("Description", "Verify that startCyclicExec returns true when terminated immediately.");
 
@@ -210,11 +188,11 @@ TEST_F(CyclicExecutorTest, StartCyclicExec_WithImmediateTermination_ReturnsTrue)
     ASSERT_TRUE(result);
 }
 
-// --------------------------------------------------------------------------
-// constructSupervision
-// --------------------------------------------------------------------------
+class CyclicExecutorConstructSupervisionTest : public CyclicExecutorTest
+{
+};
 
-TEST_F(CyclicExecutorTest, ConstructSupervision_WithValidParameters_ReturnsHandle)
+TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_WithValidParameters_ReturnsHandle)
 {
     RecordProperty("Description", "Verify that constructSupervision returns a valid handle.");
 
@@ -236,7 +214,7 @@ TEST_F(CyclicExecutorTest, ConstructSupervision_WithValidParameters_ReturnsHandl
     ASSERT_NE(handle, nullptr);
 }
 
-TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
+TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
 {
     RecordProperty("Description", "Verify that multiple supervisions can be constructed for the current user.");
 
@@ -264,7 +242,7 @@ TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_CreatesAll)
     ASSERT_NE(handle2, nullptr);
 }
 
-TEST_F(CyclicExecutorTest, ConstructSupervision_DuplicateId_ReturnsNullptr)
+TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_DuplicateId_ReturnsNullptr)
 {
     RecordProperty("Description", "Verify constructSupervision returns nullptr when the id is already registered.");
 
@@ -285,7 +263,7 @@ TEST_F(CyclicExecutorTest, ConstructSupervision_DuplicateId_ReturnsNullptr)
     ASSERT_EQ(executor.constructSupervision(id, getuid(), compConfig), nullptr);
 }
 
-TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_DoesNotCrash)
+TEST_F(CyclicExecutorConstructSupervisionTest, ConstructSupervision_MultipleSupervisions_DoesNotCrash)
 {
     RecordProperty("Description", "Verify that constructSupervision respects capacity limits.");
 
@@ -311,10 +289,6 @@ TEST_F(CyclicExecutorTest, ConstructSupervision_MultipleSupervisions_DoesNotCras
 
     // If we reach here without crash, test passed
 }
-
-// --------------------------------------------------------------------------
-// startCyclicExec error paths
-// --------------------------------------------------------------------------
 
 class CyclicExecutorLoopTest : public CyclicExecutorTest
 {
@@ -352,7 +326,7 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepInterrupted_BreaksLoop)
     ASSERT_TRUE(executor.startCyclicExec(terminate_));
 }
 
-TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepFails_LogsErrorAndContinues)
+TEST_F(CyclicExecutorLoopTest, StartCyclicExec_SleepFails_ContinuesUntilTerminated)
 {
     CyclicExecutor executor(mockClock_, 5);
     ASSERT_EQ(executor.init(mockRecoveryClient_, config_), daemon::EInitCode::kNoError);
@@ -394,15 +368,15 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_MonotonicClockUnavailable_UsesMax
         ts->tv_nsec = 0;
         if (calls++ > 0)
         {
-            g_failMonotonicClockGetTime.store(false);
+            g_fail_monotonic_clock_gettime.store(false);
             terminate_.store(true);
         }
         return 0;
     }));
 
-    g_failMonotonicClockGetTime.store(true);
+    g_fail_monotonic_clock_gettime.store(true);
     const bool result = executor.startCyclicExec(terminate_);
-    g_failMonotonicClockGetTime.store(false);
+    g_fail_monotonic_clock_gettime.store(false);
 
     ASSERT_TRUE(result);
 }

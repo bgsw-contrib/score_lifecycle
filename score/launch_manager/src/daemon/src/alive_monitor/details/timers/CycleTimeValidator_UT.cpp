@@ -24,6 +24,14 @@ using namespace std::chrono_literals;
 namespace score::mw::lifecycle::internal::saf::timers
 {
 
+inline auto ReturnClockResolution(const struct timespec& resolution)
+{
+    return Invoke([resolution](struct timespec* ts) {
+        *ts = resolution;
+        return 0;
+    });
+}
+
 class MockOsClockInterface : public OsClockInterface
 {
   public:
@@ -36,10 +44,9 @@ class CycleTimeValidatorTest : public ::testing::Test
     void SetUp() override
     {
         RecordProperty("TestType", "unit-test");
-        mock_clock_ = std::make_unique<MockOsClockInterface>();
     }
 
-    std::unique_ptr<MockOsClockInterface> mock_clock_;
+    MockOsClockInterface mock_clock_;
 };
 
 TEST_F(CycleTimeValidatorTest, GetMonotonicClockAccuracySuccessful)
@@ -48,12 +55,9 @@ TEST_F(CycleTimeValidatorTest, GetMonotonicClockAccuracySuccessful)
 
     struct timespec resolution{0, 1000000};  // 1 millisecond
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
-    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(*mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(mock_clock_);
 
     EXPECT_EQ(result.count(), 1000000);
 }
@@ -64,12 +68,9 @@ TEST_F(CycleTimeValidatorTest, GetMonotonicClockAccuracyZeroNanoseconds)
 
     struct timespec resolution{0, 0};
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
-    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(*mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(mock_clock_);
 
     EXPECT_EQ(result.count(), 0);
 }
@@ -80,12 +81,9 @@ TEST_F(CycleTimeValidatorTest, GetMonotonicClockAccuracyLargeValue)
 
     struct timespec resolution{0, 999999999};  // Almost 1 second
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
-    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(*mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(mock_clock_);
 
     EXPECT_EQ(result.count(), 999999999);
 }
@@ -94,9 +92,9 @@ TEST_F(CycleTimeValidatorTest, GetMonotonicClockAccuracyFails)
 {
     RecordProperty("Description", "Verify getMonotonicClockAccuracy returns -1 on clock failure");
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Return(-1));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(Return(-1));
 
-    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(*mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::getMonotonicClockAccuracy(mock_clock_);
 
     EXPECT_EQ(result.count(), -1);
 }
@@ -110,13 +108,10 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyReturnsRequestedTim
 
     struct timespec resolution{0, 1000000};  // 1 millisecond
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
     std::chrono::nanoseconds requested{10000000ns};  // 10 milliseconds
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result.count(), requested.count());
 }
@@ -130,13 +125,10 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyReturnsAccuracy)
 
     struct timespec resolution{0, 10000000};  // 10 milliseconds
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
     std::chrono::nanoseconds requested{1000000ns};  // 1 millisecond
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result.count(), 10000000);
 }
@@ -147,13 +139,10 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyZeroRequested)
 
     struct timespec resolution{0, 1000000};  // 1 millisecond
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
     std::chrono::nanoseconds requested{0ns};
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result.count(), 1000000);
 }
@@ -164,13 +153,10 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyNegativeRequested)
 
     struct timespec resolution{0, 1000000};  // 1 millisecond
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
     std::chrono::nanoseconds requested{-1ns};
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result.count(), 1000000);
 }
@@ -179,10 +165,10 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyClockResolutionFail
 {
     RecordProperty("Description", "Verify adjustCycleTimeOnClockAccuracy returns -1 when clock resolution fails");
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Return(-1));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(Return(-1));
 
     std::chrono::nanoseconds requested{10000000ns};
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result.count(), -1);
 }
@@ -193,13 +179,10 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyEqualValues)
 
     struct timespec resolution{0, 5000000};  // 5 milliseconds
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
     std::chrono::nanoseconds requested{5000000ns};
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result.count(), 5000000);
 }
@@ -210,15 +193,12 @@ TEST_F(CycleTimeValidatorTest, AdjustCycleTimeOnClockAccuracyLargeValues)
 
     struct timespec resolution{0, 100000};  // 100 microseconds
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).WillOnce(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).WillOnce(ReturnClockResolution(resolution));
 
-    std::chrono::nanoseconds requested{60000000000ns};  // 60 seconds
-    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds requested{60s};
+    std::chrono::nanoseconds result = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
-    EXPECT_EQ(result.count(), 60000000000);
+    EXPECT_EQ(result, 60s);
 }
 
 TEST_F(CycleTimeValidatorTest, MultipleCallsConsistent)
@@ -227,14 +207,11 @@ TEST_F(CycleTimeValidatorTest, MultipleCallsConsistent)
 
     struct timespec resolution{0, 1000000};  // 1 millisecond
 
-    EXPECT_CALL(*mock_clock_, clockGetRes(_)).Times(2).WillRepeatedly(Invoke([&resolution](struct timespec* ts) {
-        *ts = resolution;
-        return 0;
-    }));
+    EXPECT_CALL(mock_clock_, clockGetRes(_)).Times(2).WillRepeatedly(ReturnClockResolution(resolution));
 
     std::chrono::nanoseconds requested{10000000ns};
-    std::chrono::nanoseconds result1 = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
-    std::chrono::nanoseconds result2 = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, *mock_clock_);
+    std::chrono::nanoseconds result1 = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
+    std::chrono::nanoseconds result2 = CycleTimeValidator::adjustCycleTimeOnClockAccuracy(requested, mock_clock_);
 
     EXPECT_EQ(result1, result2);
 }
