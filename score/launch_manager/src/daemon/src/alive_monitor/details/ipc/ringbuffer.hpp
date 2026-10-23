@@ -77,9 +77,9 @@ class RingBuffer
             return false;
         }
         Node& n = nodes_[write_head_];
-        if (std::memcpy(n.storage, &value, sizeof(T)) != n.storage)
+        if (std::memcpy(n.storage, &value, sizeof(T)) != n.storage)  // COV_JUSTIFIED ipc-memcpy-returns-destination
         {
-            return false;
+            return false;  // COV_JUSTIFIED ipc-memcpy-returns-destination
         }
         n.size_ = sizeof(T);
         advanceWriteHead();

@@ -21,3 +21,14 @@ cc_library(
         "@googletest//:gtest_main",
     ],
 )
+
+# Linux only: the consuming test must also depend on //externals/acl for <sys/acl.h>.
+cc_library(
+    name = "mock_acl",
+    testonly = True,
+    hdrs = ["mock_acl.hpp"],
+    visibility = ["//score:__subpackages__"],
+    deps = [
+        "@googletest//:gtest_main",
+    ],
+)
