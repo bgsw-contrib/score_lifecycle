@@ -113,7 +113,7 @@ TEST_F(IpcBaseTest, GetPath_ReturnsSocketName)
 
     EXPECT_EQ(client_->getPath(), "/test");
 }
-
+////
 TEST_F(IpcBaseTest, HasOverflowWhenNotInitialized_ReturnsFalseWithoutQueryingSocket)
 {
     RecordProperty("Description", "hasOverflow() is false before init() and does not touch the socket.");

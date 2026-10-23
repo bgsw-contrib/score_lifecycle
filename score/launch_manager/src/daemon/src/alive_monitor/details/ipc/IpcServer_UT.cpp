@@ -53,8 +53,8 @@ class IpcServerTestBase : public ::testing::Test
     void SetUp() override
     {
         RecordProperty("TestType", "unit-test");
-        g_syscall_mock = std::unique_ptr<SyscallMock>(new NiceMock<SyscallMock>());
-        g_acl_mock = std::unique_ptr<AclMock>(new NiceMock<AclMock>());
+        g_syscall_mock = std::make_unique<SyscallMock>();
+        g_acl_mock = std::make_unique<AclMock>();
         installAclEntryDefaults();
 
         auto socket = std::make_unique<StrictMock<MockSocket>>();
@@ -82,10 +82,16 @@ class IpcServerTestBase : public ::testing::Test
             ++aclEntryCalls_;
             return (aclEntryCalls_ == aclFailAt_) ? -1 : 0;
         };
-        ON_CALL(*g_acl_mock, acl_create_entry(_, _)).WillByDefault(step);
+        ON_CALL(*g_acl_mock, acl_create_entry(_, _)).WillByDefault([step](acl_t*, acl_entry_t* entry) {
+            *entry = reinterpret_cast<acl_entry_t>(&g_fake_acl);
+            return step();
+        });
         ON_CALL(*g_acl_mock, acl_set_tag_type(_, _)).WillByDefault(step);
         ON_CALL(*g_acl_mock, acl_set_qualifier(_, _)).WillByDefault(step);
-        ON_CALL(*g_acl_mock, acl_get_permset(_, _)).WillByDefault(step);
+        ON_CALL(*g_acl_mock, acl_get_permset(_, _)).WillByDefault([step](acl_entry_t, acl_permset_t* permset) {
+            *permset = reinterpret_cast<acl_permset_t>(&g_fake_acl);
+            return step();
+        });
         ON_CALL(*g_acl_mock, acl_add_perm(_, _)).WillByDefault(step);
     }
 

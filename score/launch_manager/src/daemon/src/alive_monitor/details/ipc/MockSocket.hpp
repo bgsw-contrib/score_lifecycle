@@ -11,9 +11,6 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
-#ifndef ED1D7E55_4340_4EAF_96C7_3180EF5FB46B
-#define ED1D7E55_4340_4EAF_96C7_3180EF5FB46B
-
 #ifndef MOCK_IPC_SOCKET_HPP_INCLUDED
 #define MOCK_IPC_SOCKET_HPP_INCLUDED
 
@@ -67,6 +64,3 @@ class MockSocket
 }  // namespace score::mw::lifecycle::internal::saf::ipc
 
 #endif
-
-
-#endif /* ED1D7E55_4340_4EAF_96C7_3180EF5FB46B */

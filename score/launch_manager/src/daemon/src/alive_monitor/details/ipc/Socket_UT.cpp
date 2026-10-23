@@ -64,7 +64,7 @@ class SocketTestBase : public ::testing::Test
     void SetUp() override
     {
         RecordProperty("TestType", "unit-test");
-        g_syscall_mock = std::unique_ptr<SyscallMock>(new NiceMock<SyscallMock>());
+        g_syscall_mock = std::make_unique<SyscallMock>();
         new (storage_) Buffer();
     }
 
