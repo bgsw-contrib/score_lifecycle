@@ -169,9 +169,9 @@ class Socket
         {
             return ReturnCode::kError;
         }
-        if (sizeof(Payload) > ElementSize)
+        if (sizeof(Payload) > ElementSize)  // COV_JUSTIFIED ipc-payload-size-compile-time-checked
         {
-            return ReturnCode::kError;
+            return ReturnCode::kError;  // COV_JUSTIFIED ipc-payload-size-compile-time-checked
         }
         return buffer_->template tryEmplace<Payload>(std::forward<Args>(args)...) ? ReturnCode::kOk
                                                                                   : ReturnCode::kError;
