@@ -373,20 +373,23 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_MonotonicClockUnavailable_UsesMax
     ASSERT_EQ(executor.init(mockRecoveryClient_, config_), daemon::EInitCode::kNoError);
 
     // The real clock failure only has to last until performCyclicTriggers() has read it.
+    g_syscall_mock = std::make_unique<NiceMock<SyscallMock>>();
+    ON_CALL(*g_syscall_mock, clock_gettime).WillByDefault(Invoke(__real_clock_gettime));
+    ON_CALL(*g_syscall_mock, clock_gettime(CLOCK_MONOTONIC, _)).WillByDefault(Return(-1));
+
     const struct timespec now{10, 0};
     EXPECT_CALL(mockClock_, clockGetTime)
         .WillOnce(DoAll(SetArgPointee<0>(now), Return(0)))
         .WillRepeatedly(DoAll(
             SetArgPointee<0>(now),
             InvokeWithoutArgs([this] {
-                g_fail_monotonic_clock_gettime.store(false);
+                ON_CALL(*g_syscall_mock, clock_gettime).WillByDefault(Invoke(__real_clock_gettime));
                 terminate_.store(true);
             }),
             Return(0)));
 
-    g_fail_monotonic_clock_gettime.store(true);
     const bool result = executor.startCyclicExec(terminate_);
-    g_fail_monotonic_clock_gettime.store(false);
+    g_syscall_mock.reset();
 
     EXPECT_TRUE(result);
 }

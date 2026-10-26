@@ -72,7 +72,7 @@ TEST_F(CycleTimerInitTest, Init_NullInterfaceAndValidInterval_ReturnsErrorMinusT
     CycleTimer timer(nullptr);
     auto result = timer.init(10000ns);
 
-    EXPECT_EQ(result, std::chrono::nanoseconds{-2});
+    EXPECT_EQ(result, CycleTimer::kInitNullInterface);
 }
 
 TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndZeroInterval_ReturnsErrorMinusThree)
@@ -84,7 +84,7 @@ TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndZeroInterval_ReturnsErrorMinusT
     CycleTimer timer(&mockClock);
 
     auto result = timer.init(0ns);
-    EXPECT_EQ(result, std::chrono::nanoseconds{-3});
+    EXPECT_EQ(result, CycleTimer::kInitInvalidInterval);
 }
 
 TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndNegativeInterval_ReturnsErrorMinusThree)
@@ -96,7 +96,7 @@ TEST_F(CycleTimerInitTest, Init_ValidInterfaceAndNegativeInterval_ReturnsErrorMi
     CycleTimer timer(&mockClock);
 
     auto result = timer.init(std::chrono::nanoseconds{-1});
-    EXPECT_EQ(result, std::chrono::nanoseconds{-3});
+    EXPECT_EQ(result, CycleTimer::kInitInvalidInterval);
 }
 
 TEST_F(CycleTimerInitTest, Init_NullInterfaceAndInvalidInterval_ReturnsErrorMinusTwo)
@@ -110,7 +110,7 @@ TEST_F(CycleTimerInitTest, Init_NullInterfaceAndInvalidInterval_ReturnsErrorMinu
     CycleTimer timer(nullptr);
 
     auto result = timer.init(0ns);
-    EXPECT_EQ(result, std::chrono::nanoseconds{-2});
+    EXPECT_EQ(result, CycleTimer::kInitNullInterface);
 }
 
 TEST_F(CycleTimerInitTest, Init_WithClockGetTimeFailure_ReturnsErrorMinusOne)
