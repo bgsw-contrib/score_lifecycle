@@ -70,6 +70,8 @@ class SyscallMock
     MOCK_METHOD(int, msync, (void* __addr, size_t __len, int __flags), ());
     MOCK_METHOD(int, close, (int __fd), ());
     MOCK_METHOD(int, fstat, (int __fd, struct stat* __buf), ());
+    virtual ~SyscallMock() = default;
+
     MOCK_METHOD(int, clock_gettime, (clockid_t clock_id, struct timespec* ts), ());
     MOCK_METHOD(int, clock_getres, (clockid_t clock_id, struct timespec* res), ());
 };
