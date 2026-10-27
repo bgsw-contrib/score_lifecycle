@@ -78,13 +78,9 @@ class SyscallMock
 
 std::unique_ptr<SyscallMock> g_syscall_mock = nullptr;
 
-// Make clock_gettime(CLOCK_MONOTONIC) / clock_getres fail; independent of g_syscall_mock.
-inline std::atomic<bool> g_fail_monotonic_clock_gettime{false};
-inline std::atomic<bool> g_fail_clock_getres{false};
-
 extern "C" {
 // wrap for fork
-extern pid_t __real_fork(void) __attribute__((weak));
+extern pid_t __real_fork(void);
 
 pid_t __wrap_fork(void)
 {
@@ -97,7 +93,7 @@ pid_t __wrap_fork(void)
 }
 
 // wrap for execve
-extern int __real_execve(const char*, char* const[], char* const[]) __attribute__((weak));
+extern int __real_execve(const char*, char* const[], char* const[]);
 
 int __wrap_execve(const char* filename, char* const argv[], char* const envp[])
 {
@@ -110,7 +106,7 @@ int __wrap_execve(const char* filename, char* const argv[], char* const envp[])
 }
 
 // wrap for kill
-extern int __real_kill(pid_t, int) __attribute__((weak));
+extern int __real_kill(pid_t, int);
 
 int __wrap_kill(pid_t pid, int sig)
 {
@@ -123,7 +119,7 @@ int __wrap_kill(pid_t pid, int sig)
 }
 
 // wrap for wait
-extern pid_t __real_wait(int*) __attribute__((weak));
+extern pid_t __real_wait(int*);
 
 pid_t __wrap_wait(int* status)
 {
@@ -136,7 +132,7 @@ pid_t __wrap_wait(int* status)
 }
 
 // wrap for shm_open
-extern int __real_shm_open(const char*, int, mode_t) __attribute__((weak));
+extern int __real_shm_open(const char*, int, mode_t);
 
 int __wrap_shm_open(const char* name, int oflag, mode_t mode)
 {
@@ -149,7 +145,7 @@ int __wrap_shm_open(const char* name, int oflag, mode_t mode)
 }
 
 // wrap for shm_unlink
-extern int __real_shm_unlink(const char*) __attribute__((weak));
+extern int __real_shm_unlink(const char*);
 
 int __wrap_shm_unlink(const char* name)
 {
@@ -162,7 +158,7 @@ int __wrap_shm_unlink(const char* name)
 }
 
 // wrap for ftruncate
-extern int __real_ftruncate(int fildes, off_t length) __attribute__((weak));
+extern int __real_ftruncate(int fildes, off_t length);
 
 int __wrap_ftruncate(int fildes, off_t length)
 {
@@ -175,7 +171,7 @@ int __wrap_ftruncate(int fildes, off_t length)
 }
 
 // wrap for access
-extern int __real_access(const char* name, int type) __attribute__((weak));
+extern int __real_access(const char* name, int type);
 
 int __wrap_access(const char* name, int type)
 {
@@ -188,8 +184,7 @@ int __wrap_access(const char* name, int type)
 }
 
 // wrap for mmap
-extern void* __real_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd, off_t __offset)
-    __attribute__((weak));
+extern void* __real_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd, off_t __offset);
 
 void* __wrap_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd, off_t __offset)
 {
@@ -202,7 +197,7 @@ void* __wrap_mmap(void* __addr, size_t __len, int __prot, int __flags, int __fd,
 }
 
 // wrap for munmap
-extern int __real_munmap(void* __addr, size_t __len) __attribute__((weak));
+extern int __real_munmap(void* __addr, size_t __len);
 
 int __wrap_munmap(void* __addr, size_t __len)
 {
@@ -215,7 +210,7 @@ int __wrap_munmap(void* __addr, size_t __len)
 }
 
 // wrap for setpgid
-extern int __real_setpgid(pid_t __pid, pid_t __pgid) __attribute__((weak));
+extern int __real_setpgid(pid_t __pid, pid_t __pgid);
 
 int __wrap_setpgid(pid_t __pid, pid_t __pgid)
 {
@@ -228,7 +223,7 @@ int __wrap_setpgid(pid_t __pid, pid_t __pgid)
 }
 
 // wrap for setgid
-extern int __real_setgid(gid_t __gid) __attribute__((weak));
+extern int __real_setgid(gid_t __gid);
 
 int __wrap_setgid(gid_t __gid)
 {
@@ -241,7 +236,7 @@ int __wrap_setgid(gid_t __gid)
 }
 
 // wrap for setuid
-extern int __real_setuid(uid_t __uid) __attribute__((weak));
+extern int __real_setuid(uid_t __uid);
 
 int __wrap_setuid(uid_t __uid)
 {
@@ -254,8 +249,7 @@ int __wrap_setuid(uid_t __uid)
 }
 
 // wrap for sched_setscheduler
-extern int __real_sched_setscheduler(pid_t __pid, int __policy, const struct sched_param* __param)
-    __attribute__((weak));
+extern int __real_sched_setscheduler(pid_t __pid, int __policy, const struct sched_param* __param);
 
 int __wrap_sched_setscheduler(pid_t __pid, int __policy, const struct sched_param* __param)
 {
@@ -268,7 +262,7 @@ int __wrap_sched_setscheduler(pid_t __pid, int __policy, const struct sched_para
 }
 
 // wrap for chdir
-extern int __real_chdir(const char* __path) __attribute__((weak));
+extern int __real_chdir(const char* __path);
 
 int __wrap_chdir(const char* __path)
 {
@@ -281,7 +275,7 @@ int __wrap_chdir(const char* __path)
 }
 
 // wrap for setrlimit
-extern int __real_setrlimit(int __resource, const struct rlimit* __rlimits) __attribute__((weak));
+extern int __real_setrlimit(int __resource, const struct rlimit* __rlimits);
 
 int __wrap_setrlimit(int __resource, const struct rlimit* __rlimits)
 {
@@ -294,7 +288,7 @@ int __wrap_setrlimit(int __resource, const struct rlimit* __rlimits)
 }
 
 // wrap for getpid
-extern int __real_getpid() __attribute__((weak));
+extern int __real_getpid();
 
 pid_t __wrap_getpid()
 {
@@ -307,7 +301,7 @@ pid_t __wrap_getpid()
 }
 
 // wrap for fcntl
-extern int __real_fcntl(int __fd, int __cmd, ...) __attribute__((weak));
+extern int __real_fcntl(int __fd, int __cmd, ...);
 
 int __wrap_fcntl(int __fd, int __cmd, ...)
 {
@@ -327,7 +321,7 @@ int __wrap_fcntl(int __fd, int __cmd, ...)
 }
 
 // wrap for sem_destroy
-extern int __real_sem_destroy(sem_t* __sem) __attribute__((weak));
+extern int __real_sem_destroy(sem_t* __sem);
 
 int __wrap_sem_destroy(sem_t* __sem)
 {
@@ -340,7 +334,7 @@ int __wrap_sem_destroy(sem_t* __sem)
 }
 
 // wrap for msync
-extern int __real_msync(void* __addr, size_t __len, int __flags) __attribute__((weak));
+extern int __real_msync(void* __addr, size_t __len, int __flags);
 
 int __wrap_msync(void* __addr, size_t __len, int __flags)
 {
@@ -353,7 +347,7 @@ int __wrap_msync(void* __addr, size_t __len, int __flags)
 }
 
 // wrap for close
-extern int __real_close(int __fd) __attribute__((weak));
+extern int __real_close(int __fd);
 int __wrap_close(int __fd)
 {
     if (g_syscall_mock)
@@ -364,7 +358,7 @@ int __wrap_close(int __fd)
 }
 
 // wrap for fstat
-extern int __real_fstat(int __fd, struct stat* __buf) __attribute__((weak));
+extern int __real_fstat(int __fd, struct stat* __buf);
 int __wrap_fstat(int __fd, struct stat* __buf)
 {
     if (g_syscall_mock)
