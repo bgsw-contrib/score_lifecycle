@@ -220,9 +220,11 @@ TEST_F(AliveMonitorImplInitErrorPathsTest, Init_ClockResolutionUnavailable_Retur
     config.evaluation_cycle_ms = 100;
     AliveMonitorImpl monitor(mockClient_, config, 5);
 
-    g_fail_clock_getres.store(true);
+    g_syscall_mock = std::make_unique<NiceMock<SyscallMock>>();
+    ON_CALL(*g_syscall_mock, clock_getres).WillByDefault(Invoke(__real_clock_getres));
+    ON_CALL(*g_syscall_mock, clock_getres(CLOCK_MONOTONIC, _)).WillByDefault(Return(-1));
     const bool result = monitor.init();
-    g_fail_clock_getres.store(false);
+    g_syscall_mock.reset();
 
     EXPECT_FALSE(result);
 }

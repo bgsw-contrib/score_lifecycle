@@ -33,6 +33,9 @@
 #include <ctime>
 
 #include <atomic>
+#include <ctime>
+
+#include <atomic>
 
 #include <gmock/gmock.h>
 
@@ -67,6 +70,10 @@ class SyscallMock
     MOCK_METHOD(int, msync, (void* __addr, size_t __len, int __flags), ());
     MOCK_METHOD(int, close, (int __fd), ());
     MOCK_METHOD(int, fstat, (int __fd, struct stat* __buf), ());
+    virtual ~SyscallMock() = default;
+
+    MOCK_METHOD(int, clock_gettime, (clockid_t clock_id, struct timespec* ts), ());
+    MOCK_METHOD(int, clock_getres, (clockid_t clock_id, struct timespec* res), ());
 };
 
 std::unique_ptr<SyscallMock> g_syscall_mock = nullptr;
@@ -368,23 +375,23 @@ int __wrap_fstat(int __fd, struct stat* __buf)
 }
 
 // wrap for clock_gettime
-extern int __real_clock_gettime(clockid_t clock_id, struct timespec* ts) __attribute__((weak));
+extern int __real_clock_gettime(clockid_t clock_id, struct timespec* ts);
 int __wrap_clock_gettime(clockid_t clock_id, struct timespec* ts)
 {
-    if (clock_id == CLOCK_MONOTONIC && g_fail_monotonic_clock_gettime.load())
+    if (g_syscall_mock)
     {
-        return -1;
+        return g_syscall_mock->clock_gettime(clock_id, ts);
     }
     return __real_clock_gettime(clock_id, ts);
 }
 
 // wrap for clock_getres
-extern int __real_clock_getres(clockid_t clock_id, struct timespec* res) __attribute__((weak));
+extern int __real_clock_getres(clockid_t clock_id, struct timespec* res);
 int __wrap_clock_getres(clockid_t clock_id, struct timespec* res)
 {
-    if (g_fail_clock_getres.load())
+    if (g_syscall_mock)
     {
-        return -1;
+        return g_syscall_mock->clock_getres(clock_id, res);
     }
     return __real_clock_getres(clock_id, res);
 }

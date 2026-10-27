@@ -11,7 +11,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # *******************************************************************************
 load("@rules_cc//cc:defs.bzl", "cc_library")
-load("//tests/utils/bazel:unit_test.bzl", "lm_cc_test")
+load("//tests/utils/bazel:unit_test.bzl", "MOCK_SYSCALLS_WRAPPED_SYMBOLS", "linker_wrap_symbols", "lm_cc_test")
 
 cc_library(
     name = "sw_cluster_handler",
@@ -75,10 +75,7 @@ cc_library(
 lm_cc_test(
     name = "AliveMonitorImpl_UT",
     srcs = ["AliveMonitorImpl_UT.cpp"],
-    linkopts = [
-        "-Wl,--wrap=clock_gettime",
-        "-Wl,--wrap=clock_getres",
-    ],
+    linkopts = linker_wrap_symbols(MOCK_SYSCALLS_WRAPPED_SYMBOLS),
     linkstatic = True,
     deps = [
         ":health_monitor_impl",
@@ -91,10 +88,7 @@ lm_cc_test(
 lm_cc_test(
     name = "CyclicExecutor_UT",
     srcs = ["CyclicExecutor_UT.cpp"],
-    linkopts = [
-        "-Wl,--wrap=clock_gettime",
-        "-Wl,--wrap=clock_getres",
-    ],
+    linkopts = linker_wrap_symbols(MOCK_SYSCALLS_WRAPPED_SYMBOLS),
     linkstatic = True,
     deps = [
         ":cyclic_executor",
