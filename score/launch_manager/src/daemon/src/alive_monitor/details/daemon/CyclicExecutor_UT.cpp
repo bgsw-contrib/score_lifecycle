@@ -387,7 +387,6 @@ TEST_F(CyclicExecutorLoopTest, StartCyclicExec_DeadlineAlreadyOver_ContinuesUnti
     ASSERT_EQ(executor.init(mockRecoveryClient_, config_), daemon::EInitCode::kNoError);
 
     // First call (start) returns 10s; the call inside sleep() returns a time past the deadline.
-    // First call (start) returns 10s; the call inside sleep() returns a time past the deadline.
     const struct timespec start{10, 0};
     const struct timespec pastDeadline{100, 0};
     EXPECT_CALL(mockClock_, clockGetTime)
