@@ -210,6 +210,59 @@ TEST_F(AliveMonitorImplGetSupervisionFactoryTest, GetSupervisionFactory_ReturnsV
     ASSERT_NE(&factory, nullptr);
 }
 
+class AliveMonitorImplMonitoringTest : public AliveMonitorImplTest
+{
+};
+
+TEST_F(AliveMonitorImplMonitoringTest, StartAndStopMonitoring_AfterInit_ReturnsWithoutDeadlock)
+{
+    RecordProperty("Description", "Verify that the monitoring thread can be started and stopped after init.");
+
+    configuration::AliveSupervisionConfig config{};
+    config.evaluation_cycle_ms = 50;
+
+    AliveMonitorImpl monitor(mockClient_, config, 5);
+    ASSERT_TRUE(monitor.init());
+
+    monitor.startMonitoring();
+    monitor.stopMonitoring();
+
+    SUCCEED();
+}
+
+TEST_F(AliveMonitorImplMonitoringTest, StopMonitoring_WithoutStart_ReturnsWithoutDeadlock)
+{
+    RecordProperty("Description", "Verify that stopMonitoring is safe when no thread was started.");
+
+    configuration::AliveSupervisionConfig config{};
+    config.evaluation_cycle_ms = 50;
+
+    AliveMonitorImpl monitor(mockClient_, config, 5);
+    ASSERT_TRUE(monitor.init());
+
+    monitor.stopMonitoring();
+
+    SUCCEED();
+}
+
+TEST_F(AliveMonitorImplMonitoringTest, StartAndStopMonitoring_CalledTwice_ReturnsWithoutDeadlock)
+{
+    RecordProperty("Description", "Verify that start/stop can be repeated without deadlock or exceptions.");
+
+    configuration::AliveSupervisionConfig config{};
+    config.evaluation_cycle_ms = 50;
+
+    AliveMonitorImpl monitor(mockClient_, config, 5);
+    ASSERT_TRUE(monitor.init());
+
+    monitor.startMonitoring();
+    monitor.stopMonitoring();
+    monitor.startMonitoring();
+    monitor.stopMonitoring();
+
+    SUCCEED();
+}
+
 class AliveMonitorImplInitErrorPathsTest : public AliveMonitorImplTest
 {
 };
