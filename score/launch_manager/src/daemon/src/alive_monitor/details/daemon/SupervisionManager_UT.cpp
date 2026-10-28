@@ -51,7 +51,7 @@ class MockFactory : public factory::IAliveWorkerFactory
         createObservableEvent,
         (std::vector<ifexm::ObservableEvent> & events,
          const IdentifierHash component_id,
-         ifexm::ObservableEventReader& event_reader_),
+         ifexm::IObservableEventReader& event_reader_),
         (override));
 
     MOCK_METHOD(
@@ -83,7 +83,7 @@ class MockFactory : public factory::IAliveWorkerFactory
 inline auto AddObservableEvent()
 {
     return Invoke(
-        [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::ObservableEventReader&) {
+        [](std::vector<ifexm::ObservableEvent>& events, const IdentifierHash id, ifexm::IObservableEventReader&) {
             events.emplace_back(id);
             return true;
         });
