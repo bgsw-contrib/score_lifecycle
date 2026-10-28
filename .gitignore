@@ -91,5 +91,3 @@ compile_commands.json
 .cache
 rust-project.json
 **/tmp
-
-coverage_html/
