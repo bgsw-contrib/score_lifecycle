@@ -27,7 +27,8 @@ using namespace std::chrono_literals;
 namespace
 {
 
-constexpr std::chrono::seconds k_maxSeconds = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::nanoseconds::max());
+constexpr std::chrono::seconds k_maxSeconds =
+    std::chrono::duration_cast<std::chrono::seconds>(std::chrono::nanoseconds::max());
 
 const std::chrono::nanoseconds k_maxRemainderNanoSec = std::chrono::nanoseconds::max() - k_maxSeconds;
 

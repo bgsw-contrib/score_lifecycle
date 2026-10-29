@@ -75,7 +75,11 @@ class MockRecoveryClient : public IRecoveryClient
         setRecoveryRequestCallback,
         (IRecoveryClient::RecoveryRequestCallback callback),
         (noexcept, override));
-    MOCK_METHOD(bool, sendRecoveryRequest, (const IdentifierHash& process_group_identifier), (noexcept, override));
+    MOCK_METHOD(
+        bool,
+        sendRecoveryRequest,
+        (const IdentifierHash& process_group_identifier, std::chrono::nanoseconds timeout),
+        (noexcept, override));
 };
 
 class AliveMonitorImplTest : public ::testing::Test
