@@ -62,6 +62,7 @@ cc_library(
         ":i_observable_event_reader",
         ":observable_event",
         ":supervision_event",
+        ":supervision_event_queue",
         "//score/launch_manager:error_event",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/timers:time_conversion",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/timers:timers_os_clock",
@@ -76,8 +77,19 @@ cc_library(
     strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/ifexm",
     visibility = ["//score:__subpackages__"],
     deps = [
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/ipc:ipc_impl",
         "//score/launch_manager/src/daemon/src/common:identifier_hash",
+    ],
+)
+
+cc_library(
+    name = "supervision_event_queue",
+    hdrs = ["supervision_event_queue.hpp"],
+    include_prefix = "score/mw/launch_manager/alive_monitor/details/ifexm",
+    strip_include_prefix = "/score/launch_manager/src/daemon/src/alive_monitor/details/ifexm",
+    visibility = ["//score:__subpackages__"],
+    deps = [
+        ":supervision_event",
+        "//score/launch_manager/src/daemon/src/common/concurrency:mpsc_bounded_queue",
     ],
 )
 
@@ -89,6 +101,7 @@ cc_library(
     visibility = ["//score/launch_manager/src/daemon/src/alive_monitor:__subpackages__"],
     deps = [
         ":supervision_event",
+        ":supervision_event_queue",
         "//score/launch_manager/src/daemon/src/alive_monitor:ialive_supervision_handle",
         "//score/launch_manager/src/daemon/src/common:alive_interface_path",
         "//score/launch_manager/src/daemon/src/common:identifier_hash",
@@ -104,3 +117,4 @@ lm_cc_test(
         "@googletest//:gtest_main",
     ],
 )
+
