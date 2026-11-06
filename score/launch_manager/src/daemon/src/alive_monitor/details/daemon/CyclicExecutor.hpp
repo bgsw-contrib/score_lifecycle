@@ -21,6 +21,7 @@
 #include "score/mw/launch_manager/alive_monitor/details/common/EInitCode.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/daemon/SupervisionManager.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/ifexm/ObservableEventReader.hpp"
+#include "score/mw/launch_manager/alive_monitor/details/ifexm/supervision_event_queue.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/timers/CycleTimeValidator.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/timers/CycleTimer.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/timers/TimeConversion.hpp"
