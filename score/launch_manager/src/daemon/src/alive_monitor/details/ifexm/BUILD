@@ -113,8 +113,31 @@ lm_cc_test(
     name = "supervision_control_client_ut",
     srcs = ["supervision_control_client_ut.cpp"],
     deps = [
+        ":supervision_event_queue",
         ":supervision_handle",
         "@googletest//:gtest_main",
     ],
 )
 
+lm_cc_test(
+    name = "supervision_event_queue_ut",
+    srcs = ["supervision_event_queue_ut.cpp"],
+    deps = [
+        ":supervision_event",
+        ":supervision_event_queue",
+        "@googletest//:gtest_main",
+    ],
+)
+
+lm_cc_test(
+    name = "observable_event_reader_ut",
+    srcs = ["observable_event_reader_ut.cpp"],
+    deps = [
+        ":observable_event",
+        ":observable_event_reader",
+        ":supervision_event",
+        ":supervision_event_queue",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/common:observer",
+        "@googletest//:gtest_main",
+    ],
+)
