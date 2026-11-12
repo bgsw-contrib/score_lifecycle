@@ -34,6 +34,9 @@ constexpr std::size_t BUFFER_QUEUE_SIZE = 4096UL;
 class SupervisionEventQueue
 {
   public:
+    /// @brief Constructor
+    /// @details Creates a queue with the given fixed capacity.
+    /// @param [in] capacity    Maximum number of events held before new events are dropped.
     explicit SupervisionEventQueue(std::size_t capacity = BufferConstants::BUFFER_QUEUE_SIZE) : queue_(capacity)
     {
     }
@@ -49,11 +52,19 @@ class SupervisionEventQueue
     SupervisionEventQueue(SupervisionEventQueue&&) = delete;
     SupervisionEventQueue& operator=(SupervisionEventQueue&&) = delete;
 
+    /// @brief Try Enqueue
+    /// @details Thread-safe for multiple producers. On overflow the event is dropped and the sticky overflow flag is set.
+    /// @param [in] event    Event to enqueue.
+    /// @return true if enqueued, false otherwise.
     bool tryEnqueue(const SupervisionEvent& event)
     {
         return mapEnqueueResult(queue_.push(event), overflow_);
     }
 
+    /// @brief Try Dequeue
+    /// @details Must only be called from the single consumer thread; does not block.
+    /// @param [out] event    Receives the oldest event; unchanged if the queue is empty.
+    /// @return true if an event was dequeued, false if the queue is empty.
     bool tryDequeue(SupervisionEvent& event)
     {
         auto item = queue_.tryPop();
@@ -65,6 +76,10 @@ class SupervisionEventQueue
         return true;
     }
 
+    /// @brief Get Overflow Flag
+    /// @details The flag stays set until cleared by a call with reset set to true.
+    /// @param [in] reset    If true, atomically clears the flag.
+    /// @return The flag value before any reset.
     bool getOverflowFlag(bool reset = false)
     {
         return reset ? overflow_.exchange(false, std::memory_order_relaxed) : overflow_.load(std::memory_order_relaxed);
