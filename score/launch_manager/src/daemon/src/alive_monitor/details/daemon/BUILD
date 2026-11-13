@@ -104,8 +104,8 @@ lm_cc_test(
     srcs = ["SupervisionManager_UT.cpp"],
     deps = [
         ":sw_cluster_handler",
-        "//score/launch_manager/src/daemon/src/alive_monitor/details/ifexm:supervision_event_queue",
         "//score/launch_manager/src/daemon/src/alive_monitor/details/factory:alive_worker_factory",
+        "//score/launch_manager/src/daemon/src/alive_monitor/details/ifexm:supervision_event_queue",
         "@googletest//:gtest_main",
     ],
 )

@@ -147,7 +147,7 @@ TEST_F(SupervisionEventQueue_UT, OverflowFlag_IsSticky_AndResettable)
 
     SupervisionEvent out{};
     ASSERT_TRUE(queue.tryDequeue(out));
-    ASSERT_TRUE(queue.tryEnqueue(makeEvent(0, 2))); 
+    ASSERT_TRUE(queue.tryEnqueue(makeEvent(0, 2)));
 
     EXPECT_TRUE(queue.getOverflowFlag());
     EXPECT_TRUE(queue.getOverflowFlag(false));

@@ -53,7 +53,7 @@ class SupervisionEventQueue
     SupervisionEventQueue& operator=(SupervisionEventQueue&&) = delete;
 
     /// @brief Try Enqueue
-    /// @details Thread-safe for multiple producers. On overflow the event is dropped and the sticky overflow flag is set.
+    /// @details Thread-safe for multiple producers. Drops the event and sets the sticky overflow flag when full.
     /// @param [in] event    Event to enqueue.
     /// @return true if enqueued, false otherwise.
     bool tryEnqueue(const SupervisionEvent& event)
