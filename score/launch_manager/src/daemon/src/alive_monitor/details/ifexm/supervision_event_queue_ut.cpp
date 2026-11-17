@@ -50,7 +50,8 @@ class SupervisionEventQueue_UT : public ::testing::Test
 
 TEST_F(SupervisionEventQueue_UT, OverflowFlag_NotSetWithoutOverflow)
 {
-    RecordProperty("Description", "The overflow flag is clear initially and stays clear while events are accepted and dequeued.");
+    RecordProperty(
+        "Description", "The overflow flag is clear initially and stays clear while events are accepted and dequeued.");
     RecordProperty("DerivationTechnique", "equivalence-classes");
     SupervisionEventQueue queue{2};
     EXPECT_FALSE(queue.getOverflowFlag());
@@ -66,7 +67,8 @@ TEST_F(SupervisionEventQueue_UT, OverflowFlag_NotSetWithoutOverflow)
 
 TEST_F(SupervisionEventQueue_UT, OverflowFlag_SetWhenFull_AndNewestEventDropped)
 {
-    RecordProperty("Description", "Enqueuing into a full queue fails, sets the overflow flag and drops the newest event.");
+    RecordProperty(
+        "Description", "Enqueuing into a full queue fails, sets the overflow flag and drops the newest event.");
     RecordProperty("DerivationTechnique", "boundary-values");
     SupervisionEventQueue queue{2};
     ASSERT_TRUE(queue.tryEnqueue(makeEvent(0)));
@@ -84,7 +86,9 @@ TEST_F(SupervisionEventQueue_UT, OverflowFlag_SetWhenFull_AndNewestEventDropped)
 
 TEST_F(SupervisionEventQueue_UT, OverflowFlag_IsSticky_AndResettable)
 {
-    RecordProperty("Description", "The overflow flag stays set across further queue operations until it is cleared by getOverflowFlag(true).");
+    RecordProperty(
+        "Description",
+        "The overflow flag stays set across further queue operations until it is cleared by getOverflowFlag(true).");
     RecordProperty("DerivationTechnique", "equivalence-classes");
     SupervisionEventQueue queue{1};
     ASSERT_TRUE(queue.tryEnqueue(makeEvent(0)));
@@ -103,7 +107,10 @@ TEST_F(SupervisionEventQueue_UT, OverflowFlag_IsSticky_AndResettable)
 
 TEST_F(SupervisionEventQueue_UT, DefaultCapacity_IsBufferQueueSize)
 {
-    RecordProperty("Description", "A default-constructed queue holds BUFFER_QUEUE_SIZE events, then rejects further events and sets the overflow flag.");
+    RecordProperty(
+        "Description",
+        "A default-constructed queue holds BUFFER_QUEUE_SIZE events, then rejects further events and sets the overflow "
+        "flag.");
     RecordProperty("DerivationTechnique", "boundary-values");
     SupervisionEventQueue queue;
     for (std::size_t i = 0; i < BufferConstants::BUFFER_QUEUE_SIZE; ++i)
@@ -117,7 +124,10 @@ TEST_F(SupervisionEventQueue_UT, DefaultCapacity_IsBufferQueueSize)
 
 TEST_F(SupervisionEventQueue_UT, OverflowFlag_ConcurrentReset_NoLostSet)
 {
-    RecordProperty("Description", "Concurrent overflow-flag resets and overflowing enqueues never lose a set: after the last reset the flag is set or a reset observed it.");
+    RecordProperty(
+        "Description",
+        "Concurrent overflow-flag resets and overflowing enqueues never lose a set: after the last reset the flag is "
+        "set or a reset observed it.");
     RecordProperty("DerivationTechnique", "boundary-values");
     constexpr std::size_t kProducers = 16;
     SupervisionEventQueue queue{1};
