@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <memory>
+#include <new>
 #include <string>
 #include <string_view>
 
@@ -101,7 +102,8 @@ class Socket
             }
             return ReturnCode::kError;
         }
-        buffer_ = static_cast<RingBuffer<Capacity, ElementSize>*>(ptr);
+        // Start the object's lifetime in the mapped (zero-filled) storage; only the creator constructs.
+        buffer_ = ::new (ptr) RingBuffer<Capacity, ElementSize>();
         buffer_->initialize();
         return ReturnCode::kOk;
     }

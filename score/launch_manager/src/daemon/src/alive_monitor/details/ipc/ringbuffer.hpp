@@ -14,7 +14,6 @@
 #ifndef IPC_DROPIN_RINGBUFFER_HPP_
 #define IPC_DROPIN_RINGBUFFER_HPP_
 
-#include <pthread.h>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -27,11 +26,33 @@
 namespace score::mw::lifecycle::internal::saf::ipc
 {
 
+/// @brief Lock-free single-producer / single-consumer ring buffer for shared memory.
+///
+/// SPSC contract: exactly ONE producer thread (tryEnqueue/tryEmplace) and exactly ONE consumer thread
+/// (tryDequeue/tryPeek/tryPop) may use the buffer at any time; they may live in different processes. A second
+/// producer or consumer violates the single-writer ownership of write_/read_ and can lose index updates, collide on
+/// slots and overwrite unread elements.
+///
+/// empty()/full() are transient observations only; every queue operation validates the state itself.
+/// The pointer returned by tryPeek() is valid only for the single consumer and only until the corresponding
+/// successful tryPop() advances read_.
+///
+/// write_ and read_ are free-running 32-bit counters; used = uint32_t(write_ - read_) is in [0, Capacity] for valid
+/// operation, also across counter rollover. used > Capacity is a corrupted state: no slot is accessed, the overflow
+/// flag is not set and the operation fails.
+///
+/// Capacity must be a power of two. The creator must construct the object in the mapped storage (placement new)
+/// and then call initialize(); a connector must never reconstruct or reset it.
 template <std::size_t Capacity, std::size_t ElementSize>
 class RingBuffer
 {
-    static_assert(Capacity > 0, "RingBuffer capacity must be > 0");
+    static_assert(
+        Capacity > 0U && (Capacity & (Capacity - 1U)) == 0U && Capacity <= (1ULL << 31U),
+        "Capacity must be a power of two and <= 2^31");
     static_assert(ElementSize > 0, "ElementSize must be > 0");
+    static_assert(
+        std::atomic<std::uint32_t>::is_always_lock_free,
+        "std::atomic<std::uint32_t> must be lock-free for use in shared memory");
 
   public:
     RingBuffer() = default;
@@ -42,25 +63,21 @@ class RingBuffer
 
     void initialize() noexcept
     {
-        if (initialized_.load(std::memory_order_acquire))
+        static_assert(std::is_standard_layout<RingBuffer>::value, "RingBuffer must have a fixed layout");
+        static_assert(std::is_trivially_destructible<RingBuffer>::value, "RingBuffer must own no resources");
+        if (initialized_.load(std::memory_order_acquire) != 0U)
         {
             return;
         }
-        write_head_ = 0;
-        read_head_ = 0;
-        size_ = 0;
-        overflow_flag_.store(false, std::memory_order_relaxed);
-
-        pthread_mutexattr_init(&mutex_attr_);
-        pthread_mutexattr_setpshared(&mutex_attr_, PTHREAD_PROCESS_SHARED);
-
-        pthread_mutex_init(&mutex_, &mutex_attr_);
-        initialized_.store(true, std::memory_order_release);
+        write_.store(0U, std::memory_order_relaxed);
+        read_.store(0U, std::memory_order_relaxed);
+        overflow_flag_.store(0U, std::memory_order_relaxed);
+        initialized_.store(1U, std::memory_order_release);
     }
 
     bool isInitialized() const noexcept
     {
-        return initialized_.load(std::memory_order_acquire);
+        return initialized_.load(std::memory_order_acquire) != 0U;
     }
 
     template <typename T>
@@ -71,19 +88,15 @@ class RingBuffer
         static_assert(
             sizeof(T) <= ElementSize,
             "RingBuffer payload size mismatch: sizeof(T) must be <= ElementSize template parameter");
-        lock_guard lock(&mutex_);
-        if (fullImpl())
-        {
-            overflow_flag_.store(true, std::memory_order_relaxed);
-            return false;
-        }
-        Node& n = nodes_[write_head_];
-        if (std::memcpy(n.storage, std::addressof(value), sizeof(T)) == &value)
+        std::uint32_t w{};
+        if (!acquireWriteSlot(w))
         {
             return false;
         }
+        Node& n = nodes_[w & kMask];
+        std::memcpy(n.storage, std::addressof(value), sizeof(T));
         n.size_ = sizeof(T);
-        advanceWriteHead();
+        write_.store(w + 1U, std::memory_order_release);
         return true;
     }
 
@@ -97,16 +110,15 @@ class RingBuffer
         static_assert(
             sizeof(T) <= ElementSize,
             "RingBuffer payload size mismatch: sizeof(T) must be <= ElementSize template parameter");
-        lock_guard lock(&mutex_);
-        if (fullImpl())
+        std::uint32_t w{};
+        if (!acquireWriteSlot(w))
         {
-            overflow_flag_.store(true, std::memory_order_relaxed);
             return false;
         }
-        Node& n = nodes_[write_head_];
+        Node& n = nodes_[w & kMask];
         new (n.storage) T(std::forward<Args>(args)...);
         n.size_ = sizeof(T);
-        advanceWriteHead();
+        write_.store(w + 1U, std::memory_order_release);
         return true;
     }
 
@@ -117,33 +129,31 @@ class RingBuffer
         static_assert(
             sizeof(T) <= ElementSize,
             "RingBuffer payload size mismatch: sizeof(T) must be <= ElementSize template parameter");
-        lock_guard lock(&mutex_);
-        if (emptyImpl())
+        std::uint32_t r{};
+        if (!acquireReadSlot(r))
         {
             return false;
         }
-        Node& n = nodes_[read_head_];
+        Node& n = nodes_[r & kMask];
         if (n.size_ != sizeof(T))
         {
             return false;
         }
         // codeql[c/cert/library-function-argument-out-of-bounds] False positive: CodeQL sizes &out as its first member only (e.g. the 8-byte IdentifierHash of SupervisionEvent), not as a whole T. The source holds sizeof(T) by the static_assert on ElementSize and the n.size_ check.
-        if (std::memcpy(&out, n.storage, sizeof(T)) != static_cast<void*>(&out))
-        {
-            return false;
-        }
-        advanceReadHead();
+        std::memcpy(&out, n.storage, sizeof(T));
+        // The slot must not be accessed after this store: it hands the slot back to the producer.
+        read_.store(r + 1U, std::memory_order_release);
         return true;
     }
 
     bool tryPop()
     {
-        lock_guard lock(&mutex_);
-        if (emptyImpl())
+        std::uint32_t r{};
+        if (!acquireReadSlot(r))
         {
             return false;
         }
-        advanceReadHead();
+        read_.store(r + 1U, std::memory_order_release);
         return true;
     }
 
@@ -154,12 +164,12 @@ class RingBuffer
         static_assert(
             sizeof(T) <= ElementSize,
             "RingBuffer payload size mismatch: sizeof(T) must be <= ElementSize template parameter");
-        lock_guard lock(&mutex_);
-        if (emptyImpl())
+        std::uint32_t r{};
+        if (!acquireReadSlot(r))
         {
             return false;
         }
-        Node& n = nodes_[read_head_];
+        Node& n = nodes_[r & kMask];
         if (n.size_ != sizeof(T))
         {
             return false;
@@ -170,44 +180,69 @@ class RingBuffer
 
     bool getOverflowFlag(bool reset = false)
     {
-        bool b = overflow_flag_.load(std::memory_order_relaxed);
-        if (reset)
-        {
-            overflow_flag_.store(false, std::memory_order_relaxed);
-        }
-        return b;
+        const std::uint32_t v = reset ? overflow_flag_.exchange(0U, std::memory_order_relaxed)
+                                      : overflow_flag_.load(std::memory_order_relaxed);
+        return v != 0U;
     }
 
+    /// Transient observation only; the other side may change the state immediately afterwards.
     bool empty()
     {
-        lock_guard lock(&mutex_);
-        return emptyImpl();
+        return static_cast<std::uint32_t>(
+                   write_.load(std::memory_order_acquire) - read_.load(std::memory_order_relaxed)) == 0U;
     }
 
+    /// Transient observation only; a corrupted state (used > Capacity) is also reported as full.
     bool full()
     {
-        lock_guard lock(&mutex_);
-        return fullImpl();
+        return static_cast<std::uint32_t>(
+                   write_.load(std::memory_order_relaxed) - read_.load(std::memory_order_acquire)) >= Capacity;
+    }
+
+    /// @brief Overwrites the read/write counters.
+    /// @note For testing purposes only (counter rollover, corrupted state); must not be used in production code.
+    void setCountersForTesting(std::uint32_t read, std::uint32_t write) noexcept
+    {
+        read_.store(read, std::memory_order_relaxed);
+        write_.store(write, std::memory_order_relaxed);
     }
 
   private:
-    bool emptyImpl() const noexcept
+    static constexpr std::uint32_t kMask = static_cast<std::uint32_t>(Capacity - 1U);
+    static constexpr std::uint32_t kCapacity = static_cast<std::uint32_t>(Capacity);
+
+    // Producer side: on success w is the counter value of the slot to write.
+    bool acquireWriteSlot(std::uint32_t& w) noexcept
     {
-        return size_ == 0;
+        w = write_.load(std::memory_order_relaxed);
+        std::uint32_t used = w - read_.load(std::memory_order_acquire);
+        if (used >= kCapacity)
+        {
+            if (used > kCapacity)
+            {
+                return false;  // corrupted: no slot access, no overflow flag
+            }
+            // Re-load once: the first read_ may be stale after the consumer released a slot.
+            used = w - read_.load(std::memory_order_acquire);
+            if (used > kCapacity)
+            {
+                return false;
+            }
+            if (used == kCapacity)
+            {
+                overflow_flag_.store(1U, std::memory_order_relaxed);
+                return false;
+            }
+        }
+        return true;
     }
-    bool fullImpl() const noexcept
+
+    // Consumer side: on success r is the counter value of the slot to read.
+    bool acquireReadSlot(std::uint32_t& r) noexcept
     {
-        return size_ == Capacity;
-    }
-    void advanceWriteHead() noexcept
-    {
-        write_head_ = (write_head_ + 1) % Capacity;
-        ++size_;
-    }
-    void advanceReadHead() noexcept
-    {
-        read_head_ = (read_head_ + 1) % Capacity;
-        --size_;
+        r = read_.load(std::memory_order_relaxed);
+        const std::uint32_t used = write_.load(std::memory_order_acquire) - r;
+        return (used != 0U) && (used <= kCapacity);  // used > Capacity is corrupted: fail without slot access
     }
 
     struct Node
@@ -216,27 +251,11 @@ class RingBuffer
         std::size_t size_;
     };
 
-    struct lock_guard
-    {
-        explicit lock_guard(pthread_mutex_t* m) : m_(m)
-        {
-            pthread_mutex_lock(m_);
-        }
-        ~lock_guard()
-        {
-            pthread_mutex_unlock(m_);
-        }
-        pthread_mutex_t* m_;
-    };
-
+    alignas(64) std::atomic<std::uint32_t> write_{0U};  // producer-owned
+    alignas(64) std::atomic<std::uint32_t> read_{0U};   // consumer-owned
+    alignas(64) std::atomic<std::uint32_t> overflow_flag_{0U};  // 0U / 1U only
+    std::atomic<std::uint32_t> initialized_{0U};                // 0U / 1U only
     Node nodes_[Capacity] = {};
-    std::size_t write_head_ = 0;
-    std::size_t read_head_ = 0;
-    std::size_t size_ = 0;
-    std::atomic<bool> overflow_flag_{false};
-    std::atomic<bool> initialized_{false};
-    pthread_mutex_t mutex_{};
-    pthread_mutexattr_t mutex_attr_{};
 };
 
 }  // namespace score::mw::lifecycle::internal::saf::ipc

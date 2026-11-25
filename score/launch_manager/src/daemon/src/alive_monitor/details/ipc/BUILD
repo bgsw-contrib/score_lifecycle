@@ -57,3 +57,12 @@ lm_cc_test(
         "@score_baselibs//score/os/utils/acl:mock",
     ],
 )
+
+lm_cc_test(
+    name = "ringbuffer_UT",
+    srcs = ["ringbuffer_UT.cpp"],
+    deps = [
+        ":ipc_impl",
+        "@googletest//:gtest_main",
+    ],
+)
