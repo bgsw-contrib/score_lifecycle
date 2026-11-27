@@ -21,6 +21,8 @@ struct RunTargetInfo
 };
 
 static constexpr const char* control_socket_path = "/sm_control";
+// The control queue is single-producer. Concurrent CLI processes serialize their sends with a lock on this file.
+static constexpr const char* control_send_lock_path = "/tmp/sm_control.lock";
 static constexpr std::size_t control_socket_capacity = 32;
 
 #endif
