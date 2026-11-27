@@ -88,12 +88,12 @@ class Socket
             }
             return ReturnCode::kError;
         }
-        void* ptr = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        void* mapped_ptr = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         const int mmap_errno = errno;
         // The mapping stays valid after closing the fd. Close it right away, as every open fd slows down process
         // launching on QNX.
         ::close(fd);
-        if (ptr == MAP_FAILED)
+        if (mapped_ptr == MAP_FAILED)
         {
             cleanup();
             if (mmap_errno == EACCES || mmap_errno == EPERM)
@@ -103,7 +103,7 @@ class Socket
             return ReturnCode::kError;
         }
         // Start the object's lifetime in the mapped (zero-filled) storage; only the creator constructs.
-        buffer_ = ::new (ptr) RingBuffer<Capacity, ElementSize>();
+        buffer_ = ::new (mapped_ptr) score::mw::lifecycle::internal::saf::ipc::RingBuffer<Capacity, ElementSize>();
         buffer_->initialize();
         return ReturnCode::kOk;
     }
@@ -126,12 +126,12 @@ class Socket
             return ReturnCode::kError;
         }
         const std::size_t bytes = sizeof(RingBuffer<Capacity, ElementSize>);
-        void* ptr = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+        void* mapped_ptr = mmap(nullptr, bytes, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
         const int mmap_errno = errno;
         // The mapping stays valid after closing the fd. Close it right away, as every open fd slows down process
         // launching on QNX.
         ::close(fd);
-        if (ptr == MAP_FAILED)
+        if (mapped_ptr == MAP_FAILED)
         {
             if (mmap_errno == EACCES || mmap_errno == EPERM)
             {
@@ -139,7 +139,7 @@ class Socket
             }
             return ReturnCode::kError;
         }
-        buffer_ = static_cast<RingBuffer<Capacity, ElementSize>*>(ptr);
+        buffer_ = static_cast<RingBuffer<Capacity, ElementSize>*>(mapped_ptr);
 
         if (!buffer_->isInitialized())
         {

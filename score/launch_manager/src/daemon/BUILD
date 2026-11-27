@@ -64,12 +64,3 @@ cc_binary(
         "//conditions:default": ["@score_logging//score/mw/log/backend:remote"],
     }),
 )
-
-lm_cc_test(
-    name = "ringbuffer_UT",
-    srcs = ["ringbuffer_UT.cpp"],
-    deps = [
-        ":ipc_impl",
-        "@googletest//:gtest_main",
-    ],
-)

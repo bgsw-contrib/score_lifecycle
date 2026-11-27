@@ -52,6 +52,9 @@ class RingBufferTest : public ::testing::Test
 
 TEST_F(RingBufferTest, HandshakeFlagSetByInitialize)
 {
+    RecordProperty(
+        "Description", "A new buffer reports not initialized until initialize() is called, then reports initialized.");
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     Rb fresh;
     EXPECT_FALSE(fresh.isInitialized());
     fresh.initialize();
@@ -60,6 +63,8 @@ TEST_F(RingBufferTest, HandshakeFlagSetByInitialize)
 
 TEST_F(RingBufferTest, EmptyBufferRejectsReadOperations)
 {
+    RecordProperty("Description", "On an empty buffer tryDequeue, tryPeek and tryPop all fail.");
+    RecordProperty("DerivationTechnique", "boundary-values");
     Item out{};
     Item* p{};
     EXPECT_TRUE(rb_->empty());
@@ -70,6 +75,10 @@ TEST_F(RingBufferTest, EmptyBufferRejectsReadOperations)
 
 TEST_F(RingBufferTest, EnqueueDequeueKeepsFifoOrderAcrossWrap)
 {
+    RecordProperty(
+        "Description",
+        "Elements are dequeued in the order they were enqueued, also when the slot index wraps around the capacity.");
+    RecordProperty("DerivationTechnique", "boundary-values");
     std::uint64_t next_in = 0U;
     std::uint64_t next_out = 0U;
     for (int round = 0; round < 5; ++round)
@@ -94,6 +103,9 @@ TEST_F(RingBufferTest, EnqueueDequeueKeepsFifoOrderAcrossWrap)
 
 TEST_F(RingBufferTest, EmplaceAndPeekPop)
 {
+    RecordProperty(
+        "Description", "An element constructed in place can be peeked and then popped, leaving the buffer empty.");
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     ASSERT_TRUE(rb_->tryEmplace<Item>(Item{7U, ~std::uint64_t{7U}}));
     Item* p{};
     ASSERT_TRUE(rb_->tryPeek(p));
@@ -105,6 +117,11 @@ TEST_F(RingBufferTest, EmplaceAndPeekPop)
 
 TEST_F(RingBufferTest, FullRejectsNewestKeepsOldestAndSetsOverflow)
 {
+    RecordProperty(
+        "Description",
+        "Enqueue on a full buffer fails, keeps the oldest element and sets the overflow flag, which stays set until it "
+        "is reset.");
+    RecordProperty("DerivationTechnique", "boundary-values");
     for (std::uint64_t i = 0; i < kCap; ++i)
     {
         ASSERT_TRUE(rb_->tryEnqueue(Item{i, ~i}));
@@ -123,6 +140,8 @@ TEST_F(RingBufferTest, FullRejectsNewestKeepsOldestAndSetsOverflow)
 
 TEST_F(RingBufferTest, CorruptedStateFailsWithoutSlotAccessOrOverflowFlag)
 {
+    RecordProperty("Description", "With inconsistent counters (used > capacity) all operations fail without slot access and without setting the overflow flag.");
+    RecordProperty("DerivationTechnique", "error-condition-injection");
     rb_->setCountersForTesting(0U, static_cast<std::uint32_t>(kCap) + 1U);
     Item out{};
     Item* p{};
@@ -136,6 +155,8 @@ TEST_F(RingBufferTest, CorruptedStateFailsWithoutSlotAccessOrOverflowFlag)
 
 TEST_F(RingBufferTest, CountersRollOverUint32Max)
 {
+    RecordProperty("Description", "Empty and full detection and FIFO order stay correct when the 32-bit counters wrap past UINT32_MAX.");
+    RecordProperty("DerivationTechnique", "boundary-values");
     const std::uint32_t start = UINT32_MAX - 2U;
     rb_->setCountersForTesting(start, start);
     for (std::uint64_t i = 0; i < 20U; ++i)
@@ -163,13 +184,36 @@ TEST_F(RingBufferTest, CountersRollOverUint32Max)
 
 TEST_F(RingBufferTest, TypeMismatchIsRejected)
 {
+    RecordProperty("Description", "Dequeue with a type whose size differs from the stored element fails.");
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     ASSERT_TRUE(rb_->tryEnqueue(Item{1U, ~std::uint64_t{1U}}));
     std::uint32_t small{};
     EXPECT_FALSE(rb_->tryDequeue(small));
+    std::uint32_t* peeked{};
+    EXPECT_FALSE(rb_->tryPeek(peeked));
+    EXPECT_EQ(peeked, nullptr);
+    Item out{};
+    EXPECT_TRUE(rb_->tryDequeue(out));
+}
+
+TEST_F(RingBufferTest, RepeatedInitializeKeepsExistingContent)
+{
+    RecordProperty("Description", "A second initialize() call is a no-op and does not discard queued elements.");
+    RecordProperty("DerivationTechnique", "equivalence-classes");
+    ASSERT_TRUE(rb_->tryEnqueue(Item{3U, ~std::uint64_t{3U}}));
+    rb_->initialize();
+    EXPECT_TRUE(rb_->isInitialized());
+    Item out{};
+    ASSERT_TRUE(rb_->tryDequeue(out));
+    EXPECT_EQ(out.seq, 3U);
 }
 
 TEST(RingBufferStress, OneProducerOneConsumerOneMillionTransfers)
 {
+    RecordProperty(
+        "Description",
+        "One producer and one consumer thread transfer one million elements without loss, duplication or reordering.");
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     auto rb = std::make_unique<Rb>();
     rb->initialize();
     constexpr std::uint64_t kTransfers = 1000000U;
@@ -217,6 +261,11 @@ TEST(RingBufferStress, OneProducerOneConsumerOneMillionTransfers)
 
 TEST(RingBufferSocket, CreateConnectTransfersAcrossMappings)
 {
+    RecordProperty(
+        "Description",
+        "An element sent through a connected socket is received through the creating socket, then the queue reports "
+        "empty.");
+    RecordProperty("DerivationTechnique", "equivalence-classes");
     const std::string name = "/rb_ut_" + std::to_string(::getpid());
     Socket<sizeof(Item), kCap> server;
     Socket<sizeof(Item), kCap> client;

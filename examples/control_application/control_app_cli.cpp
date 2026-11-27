@@ -10,10 +10,69 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 
 #include "control.hpp"
 #include "score/mw/launch_manager/alive_monitor/details/ipc/socket.hpp"
+
+namespace
+{
+/// @brief Holds an exclusive inter-process lock for its lifetime
+/// @details Serializes senders because the control queue allows only one producer at a time. The OS releases the
+/// lock if the process dies.
+class SendLock
+{
+  public:
+    /// @brief Opens the lock file and blocks until the exclusive lock is acquired
+    /// @details On failure the object stays unlocked and holds no file descriptor.
+    SendLock() : fd_(::open(control_send_lock_path, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600))
+    {
+        if (fd_ < 0)
+        {
+            return;
+        }
+        struct flock lock{};
+        lock.l_type = F_WRLCK;
+        lock.l_whence = SEEK_SET;
+        while (::fcntl(fd_, F_SETLKW, &lock) == -1)
+        {
+            if (errno != EINTR)
+            {
+                ::close(fd_);
+                fd_ = -1;
+                return;
+            }
+        }
+    }
+    ~SendLock()
+    {
+        if (fd_ >= 0)
+        {
+            ::close(fd_);
+        }
+    }
+    SendLock(const SendLock&) = delete;
+    SendLock& operator=(const SendLock&) = delete;
+    SendLock(SendLock&&) = delete;
+    SendLock& operator=(SendLock&&) = delete;
+
+    /// @brief Checks whether the lock is held
+    /// @return true if the lock was acquired
+    bool isLocked() const
+    {
+        return fd_ >= 0;
+    }
+
+  private:
+    int fd_;
+};
+}  // namespace
 
 int main(int argc, char** argv)
 {
@@ -29,6 +88,13 @@ int main(int argc, char** argv)
     if (sm_control_socket.connect(control_socket_path) != score::mw::lifecycle::internal::saf::ipc::ReturnCode::kOk)
     {
         std::cerr << "Could not connect to control socket" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    SendLock send_lock;
+    if (!send_lock.isLocked())
+    {
+        std::cerr << "Could not lock control socket for sending" << std::endl;
         return EXIT_FAILURE;
     }
 
